@@ -7,7 +7,7 @@ export interface User {
   restaurantId: string;
 }
 
-export type TableStatus = 'free' | 'occupied' | 'cooking' | 'ready';
+export type TableStatus = 'free' | 'occupied' | 'cooking' | 'ready' | 'bill_requested';
 
 export interface RestaurantTable {
   id: string;
@@ -34,7 +34,7 @@ export interface OrderItem {
   notes?: string;
 }
 
-export type OrderStatus = 'nuevo' | 'en_preparacion' | 'listo' | 'pagado';
+export type OrderStatus = 'nuevo' | 'en_preparacion' | 'listo' | 'pagado' | 'entregado';
 
 export interface Order {
   id: string;

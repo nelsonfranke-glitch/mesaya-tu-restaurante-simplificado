@@ -1,19 +1,18 @@
 import { useApp } from '@/context/AppContext';
-import { Order, OrderStatus } from '@/types';
+import { OrderStatus } from '@/types';
 import { Clock, LogOut } from 'lucide-react';
 
-const statusFlow: Record<OrderStatus, { next: OrderStatus | null; label: string; btnClass: string }> = {
+// Kitchen can ONLY change order status: nuevo → en_preparacion → listo
+const statusFlow: Record<string, { next: OrderStatus | null; label: string; btnClass: string }> = {
   nuevo: { next: 'en_preparacion', label: 'Preparar', btnClass: 'bg-table-cooking text-primary-foreground' },
-  en_preparacion: { next: 'listo', label: 'Listo', btnClass: 'bg-table-ready text-primary-foreground' },
-  listo: { next: null, label: 'Entregado', btnClass: 'opacity-50' },
-  pagado: { next: null, label: 'Pagado', btnClass: 'opacity-30' },
+  en_preparacion: { next: 'listo', label: 'Plato listo', btnClass: 'bg-table-ready text-primary-foreground' },
+  listo: { next: null, label: '✅ Listo', btnClass: 'opacity-50' },
 };
 
-const statusColors: Record<OrderStatus, string> = {
+const statusColors: Record<string, string> = {
   nuevo: 'border-table-occupied',
   en_preparacion: 'border-table-cooking',
   listo: 'border-table-ready',
-  pagado: 'border-table-free',
 };
 
 const elapsed = (date: Date) => {
@@ -24,13 +23,13 @@ const elapsed = (date: Date) => {
 const KitchenPage = () => {
   const { orders, updateOrderStatus, logout, currentUser } = useApp();
 
+  // Kitchen only sees orders that need attention (nuevo, en_preparacion, listo)
   const activeOrders = orders
-    .filter(o => o.status !== 'pagado')
+    .filter(o => ['nuevo', 'en_preparacion', 'listo'].includes(o.status))
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   return (
     <div className="min-h-screen bg-[hsl(220,15%,8%)] text-[hsl(0,0%,95%)] flex flex-col">
-      {/* Header */}
       <header className="px-4 py-3 flex items-center justify-between border-b border-[hsl(220,15%,18%)]">
         <div>
           <h1 className="font-display font-bold text-2xl text-primary">MesaYa</h1>
@@ -44,7 +43,6 @@ const KitchenPage = () => {
         </div>
       </header>
 
-      {/* Orders grid */}
       <div className="flex-1 p-4 overflow-y-auto">
         {activeOrders.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -54,12 +52,12 @@ const KitchenPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {activeOrders.map(order => {
               const flow = statusFlow[order.status];
+              if (!flow) return null;
               return (
                 <div
                   key={order.id}
-                  className={`rounded-xl border-2 ${statusColors[order.status]} bg-[hsl(220,15%,12%)] flex flex-col`}
+                  className={`rounded-xl border-2 ${statusColors[order.status] || 'border-border'} bg-[hsl(220,15%,12%)] flex flex-col`}
                 >
-                  {/* Card header */}
                   <div className="px-4 py-3 border-b border-[hsl(220,15%,18%)] flex items-center justify-between">
                     <div>
                       <div className="font-display font-bold text-xl">{order.tableName}</div>
@@ -71,7 +69,6 @@ const KitchenPage = () => {
                     </div>
                   </div>
 
-                  {/* Items */}
                   <div className="flex-1 px-4 py-3 space-y-2">
                     {order.items.map(item => (
                       <div key={item.id}>
@@ -88,7 +85,6 @@ const KitchenPage = () => {
                     ))}
                   </div>
 
-                  {/* Action */}
                   {flow.next && (
                     <div className="p-3 border-t border-[hsl(220,15%,18%)]">
                       <button
