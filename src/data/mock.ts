@@ -1,0 +1,120 @@
+import { RestaurantTable, MenuItem, Order, Ingredient } from '@/types';
+
+export const mockTables: RestaurantTable[] = [
+  { id: '1', name: 'Mesa 1', capacity: 2, status: 'free' },
+  { id: '2', name: 'Mesa 2', capacity: 4, status: 'occupied' },
+  { id: '3', name: 'Mesa 3', capacity: 4, status: 'cooking' },
+  { id: '4', name: 'Mesa 4', capacity: 6, status: 'ready' },
+  { id: '5', name: 'Mesa 5', capacity: 2, status: 'free' },
+  { id: '6', name: 'Mesa 6', capacity: 8, status: 'free' },
+  { id: '7', name: 'Mesa 7', capacity: 4, status: 'occupied' },
+  { id: '8', name: 'Mesa 8', capacity: 2, status: 'free' },
+  { id: '9', name: 'Barra 1', capacity: 1, status: 'free' },
+  { id: '10', name: 'Barra 2', capacity: 1, status: 'cooking' },
+  { id: '11', name: 'Terraza 1', capacity: 4, status: 'free' },
+  { id: '12', name: 'Terraza 2', capacity: 6, status: 'free' },
+];
+
+export const mockMenu: MenuItem[] = [
+  { id: 'm1', name: 'Empanadas (x3)', category: 'entradas', price: 1800, description: 'Carne cortada a cuchillo' },
+  { id: 'm2', name: 'Provoleta', category: 'entradas', price: 2200, description: 'Con orégano y aceite de oliva' },
+  { id: 'm3', name: 'Bruschetta', category: 'entradas', price: 1500, description: 'Tomate, albahaca y ajo' },
+  { id: 'm4', name: 'Tabla de fiambres', category: 'entradas', price: 3500, description: 'Jamón, queso, aceitunas' },
+  { id: 'm5', name: 'Milanesa napolitana', category: 'principales', price: 4200, description: 'Con papas fritas' },
+  { id: 'm6', name: 'Bife de chorizo', category: 'principales', price: 5800, description: '400g con guarnición' },
+  { id: 'm7', name: 'Pastas del día', category: 'principales', price: 3800, description: 'Consultar variedad' },
+  { id: 'm8', name: 'Pollo a la parrilla', category: 'principales', price: 3500, description: 'Con ensalada mixta' },
+  { id: 'm9', name: 'Suprema maryland', category: 'principales', price: 4000, description: 'Con banana y choclo' },
+  { id: 'm10', name: 'Flan casero', category: 'postres', price: 1200, description: 'Con dulce de leche y crema' },
+  { id: 'm11', name: 'Tiramisú', category: 'postres', price: 1800, description: 'Receta italiana' },
+  { id: 'm12', name: 'Panqueques', category: 'postres', price: 1500, description: 'Con dulce de leche' },
+  { id: 'm13', name: 'Coca-Cola', category: 'bebidas', price: 800 },
+  { id: 'm14', name: 'Agua mineral', category: 'bebidas', price: 600 },
+  { id: 'm15', name: 'Cerveza artesanal', category: 'bebidas', price: 1200 },
+  { id: 'm16', name: 'Vino Malbec (copa)', category: 'bebidas', price: 1500 },
+  { id: 'm17', name: 'Limonada', category: 'bebidas', price: 900 },
+];
+
+export const mockOrders: Order[] = [
+  {
+    id: 'o1',
+    tableId: '2',
+    tableName: 'Mesa 2',
+    waiterId: 'w1',
+    waiterName: 'Carlos',
+    items: [
+      { id: 'oi1', menuItem: mockMenu[0], quantity: 1, notes: '' },
+      { id: 'oi2', menuItem: mockMenu[4], quantity: 2, notes: 'Una sin sal' },
+      { id: 'oi3', menuItem: mockMenu[12], quantity: 2 },
+    ],
+    status: 'nuevo',
+    createdAt: new Date(Date.now() - 5 * 60 * 1000),
+  },
+  {
+    id: 'o2',
+    tableId: '3',
+    tableName: 'Mesa 3',
+    waiterId: 'w1',
+    waiterName: 'Carlos',
+    items: [
+      { id: 'oi4', menuItem: mockMenu[5], quantity: 1, notes: 'Bien cocido' },
+      { id: 'oi5', menuItem: mockMenu[1], quantity: 1 },
+      { id: 'oi6', menuItem: mockMenu[15], quantity: 2 },
+    ],
+    status: 'en_preparacion',
+    createdAt: new Date(Date.now() - 18 * 60 * 1000),
+  },
+  {
+    id: 'o3',
+    tableId: '7',
+    tableName: 'Mesa 7',
+    waiterId: 'w2',
+    waiterName: 'María',
+    items: [
+      { id: 'oi7', menuItem: mockMenu[6], quantity: 3 },
+      { id: 'oi8', menuItem: mockMenu[14], quantity: 3 },
+    ],
+    status: 'nuevo',
+    createdAt: new Date(Date.now() - 2 * 60 * 1000),
+  },
+  {
+    id: 'o4',
+    tableId: '10',
+    tableName: 'Barra 2',
+    waiterId: 'w2',
+    waiterName: 'María',
+    items: [
+      { id: 'oi9', menuItem: mockMenu[9], quantity: 1 },
+      { id: 'oi10', menuItem: mockMenu[16], quantity: 1 },
+    ],
+    status: 'en_preparacion',
+    createdAt: new Date(Date.now() - 12 * 60 * 1000),
+  },
+  {
+    id: 'o5',
+    tableId: '4',
+    tableName: 'Mesa 4',
+    waiterId: 'w1',
+    waiterName: 'Carlos',
+    items: [
+      { id: 'oi11', menuItem: mockMenu[7], quantity: 2 },
+      { id: 'oi12', menuItem: mockMenu[3], quantity: 1 },
+      { id: 'oi13', menuItem: mockMenu[13], quantity: 4 },
+    ],
+    status: 'listo',
+    createdAt: new Date(Date.now() - 35 * 60 * 1000),
+  },
+];
+
+export const mockIngredients: Ingredient[] = [
+  { id: 'i1', name: 'Milanesa de ternera', unit: 'unidades', stockQty: 15, minThreshold: 5 },
+  { id: 'i2', name: 'Salsa de tomate', unit: 'litros', stockQty: 3, minThreshold: 2 },
+  { id: 'i3', name: 'Queso mozzarella', unit: 'kg', stockQty: 1.5, minThreshold: 2 },
+  { id: 'i4', name: 'Papas', unit: 'kg', stockQty: 20, minThreshold: 5 },
+  { id: 'i5', name: 'Bife de chorizo', unit: 'unidades', stockQty: 8, minThreshold: 4 },
+  { id: 'i6', name: 'Pollo', unit: 'kg', stockQty: 6, minThreshold: 3 },
+  { id: 'i7', name: 'Cerveza artesanal', unit: 'litros', stockQty: 25, minThreshold: 10 },
+  { id: 'i8', name: 'Vino Malbec', unit: 'litros', stockQty: 12, minThreshold: 5 },
+  { id: 'i9', name: 'Dulce de leche', unit: 'kg', stockQty: 0.8, minThreshold: 1 },
+  { id: 'i10', name: 'Huevos', unit: 'unidades', stockQty: 30, minThreshold: 12 },
+];

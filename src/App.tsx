@@ -2,24 +2,40 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import { AppProvider, useApp } from "@/context/AppContext";
+import LoginPage from "@/pages/LoginPage";
+import WaiterPage from "@/pages/WaiterPage";
+import KitchenPage from "@/pages/KitchenPage";
+import DashboardPage from "@/pages/DashboardPage";
 
 const queryClient = new QueryClient();
+
+const AppRouter = () => {
+  const { currentUser } = useApp();
+
+  if (!currentUser) return <LoginPage />;
+
+  switch (currentUser.role) {
+    case 'kitchen':
+      return <KitchenPage />;
+    case 'owner':
+    case 'manager':
+      return <DashboardPage />;
+    case 'waiter':
+      return <WaiterPage />;
+    default:
+      return <LoginPage />;
+  }
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AppProvider>
+        <AppRouter />
+      </AppProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
