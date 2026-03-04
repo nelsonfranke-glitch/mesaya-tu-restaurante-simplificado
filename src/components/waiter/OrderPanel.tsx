@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { RestaurantTable, MenuItem, OrderItem, MenuCategory } from '@/types';
-import { ArrowLeft, Minus, Plus, Send, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Send, MessageSquare, Receipt, CreditCard, PlusCircle } from 'lucide-react';
 
 const categories: { key: MenuCategory; label: string }[] = [
   { key: 'entradas', label: 'Entradas' },
@@ -16,13 +16,25 @@ interface Props {
 }
 
 const OrderPanel = ({ table, onBack }: Props) => {
-  const { menu, addOrder, currentUser, orders } = useApp();
+  const { menu, addOrder, addItemsToTable, requestBill, markPaid, currentUser, orders } = useApp();
   const [activeCategory, setActiveCategory] = useState<MenuCategory>('entradas');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
-  const existingOrder = orders.find(o => o.tableId === table.id && o.status !== 'pagado');
+  // All orders for this table that aren't paid
+  const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'pagado');
+  const hasActiveOrders = tableOrders.length > 0;
+  const isFreeTable = table.status === 'free';
+  const isBillRequested = table.status === 'bill_requested';
+
+  // Running total of ALL items ordered so far
+  const allOrderedItems = tableOrders.flatMap(o => o.items);
+  const runningTotal = allOrderedItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
+
+  // New items total
+  const newItemsTotal = orderItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
 
   const addItem = (item: MenuItem) => {
     setOrderItems(prev => {
@@ -45,30 +57,38 @@ const OrderPanel = ({ table, onBack }: Props) => {
     setOrderItems(prev => prev.map(oi => oi.menuItem.id === itemId ? { ...oi, notes } : oi));
   };
 
-  const total = orderItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
-
   const sendOrder = () => {
     if (orderItems.length === 0) return;
-    addOrder({
-      id: `o-${Date.now()}`,
-      tableId: table.id,
-      tableName: table.name,
-      waiterId: currentUser?.id || '',
-      waiterName: currentUser?.name || '',
-      items: orderItems,
-      status: 'nuevo',
-      createdAt: new Date(),
-    });
+    if (isFreeTable && !hasActiveOrders) {
+      // First order for a free table
+      addOrder({
+        id: `o-${Date.now()}`,
+        tableId: table.id,
+        tableName: table.name,
+        waiterId: currentUser?.id || '',
+        waiterName: currentUser?.name || '',
+        items: orderItems,
+        status: 'nuevo',
+        createdAt: new Date(),
+      });
+    } else {
+      // Adding items to an already active table
+      addItemsToTable(table.id, orderItems);
+    }
+    setOrderItems([]);
     setSent(true);
-    setTimeout(() => onBack(), 1500);
+    setTimeout(() => {
+      setSent(false);
+      setShowMenu(false);
+    }, 1500);
   };
 
   if (sent) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
-            <Send className="w-8 h-8 text-success" />
+          <div className="w-16 h-16 rounded-full bg-table-ready/20 flex items-center justify-center mx-auto mb-4">
+            <Send className="w-8 h-8 text-table-ready" />
           </div>
           <h3 className="font-display font-semibold text-xl text-foreground">¡Pedido enviado!</h3>
           <p className="text-muted-foreground mt-1">{table.name} — enviado a cocina</p>
@@ -77,11 +97,134 @@ const OrderPanel = ({ table, onBack }: Props) => {
     );
   }
 
+  // If table is free or waiter chose to add items, show the menu
+  const shouldShowMenu = isFreeTable && !hasActiveOrders || showMenu;
+
+  if (shouldShowMenu) {
+    return <MenuView
+      table={table}
+      onBack={() => { setShowMenu(false); if (isFreeTable) onBack(); }}
+      menu={menu}
+      activeCategory={activeCategory}
+      setActiveCategory={setActiveCategory}
+      orderItems={orderItems}
+      addItem={addItem}
+      updateQty={updateQty}
+      updateNote={updateNote}
+      editingNoteId={editingNoteId}
+      setEditingNoteId={setEditingNoteId}
+      newItemsTotal={newItemsTotal}
+      sendOrder={sendOrder}
+    />;
+  }
+
+  // Active table view — show order summary
+  return (
+    <div className="flex-1 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 pt-4 pb-2 border-b border-border">
+        <button onClick={onBack} className="touch-target p-2 rounded-lg hover:bg-muted transition-colors">
+          <ArrowLeft className="w-5 h-5 text-foreground" />
+        </button>
+        <div className="flex-1">
+          <h2 className="font-display font-semibold text-lg text-foreground">{table.name}</h2>
+          <p className="text-xs text-muted-foreground">{table.capacity} personas • {tableOrders.length} pedido(s) activo(s)</p>
+        </div>
+      </div>
+
+      {/* All ordered items */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {tableOrders.map(order => (
+          <div key={order.id} className="rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                {order.createdAt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                order.status === 'nuevo' ? 'bg-table-occupied/20 text-table-occupied' :
+                order.status === 'en_preparacion' ? 'bg-table-cooking/20 text-table-cooking' :
+                order.status === 'listo' ? 'bg-table-ready/20 text-table-ready' :
+                'bg-muted text-muted-foreground'
+              }`}>
+                {order.status === 'nuevo' ? 'Nuevo' :
+                 order.status === 'en_preparacion' ? 'En preparación' :
+                 order.status === 'listo' ? '✅ Listo' :
+                 order.status === 'entregado' ? 'Entregado' : order.status}
+              </span>
+            </div>
+            {order.items.map(item => (
+              <div key={item.id} className="flex justify-between py-1">
+                <span className="text-sm text-foreground">
+                  <span className="font-semibold text-primary mr-1">×{item.quantity}</span>
+                  {item.menuItem.name}
+                </span>
+                <span className="text-sm font-display text-foreground">
+                  ${(item.menuItem.price * item.quantity).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Running total + actions */}
+      <div className="p-4 border-t border-border space-y-3 bg-card">
+        <div className="flex justify-between items-center">
+          <span className="font-display font-semibold text-foreground">Total acumulado</span>
+          <span className="font-display font-bold text-2xl text-primary">${runningTotal.toLocaleString()}</span>
+        </div>
+
+        {!isBillRequested ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowMenu(true)}
+              className="touch-target flex-1 py-4 rounded-lg bg-primary text-primary-foreground font-display font-semibold text-base transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <PlusCircle className="w-5 h-5" />
+              Agregar más items
+            </button>
+            <button
+              onClick={() => requestBill(table.id)}
+              className="touch-target flex-1 py-4 rounded-lg border-2 border-primary text-primary font-display font-semibold text-base transition-all hover:bg-primary/10 active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Receipt className="w-5 h-5" />
+              Solicitar cuenta
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => { markPaid(table.id); onBack(); }}
+            className="touch-target w-full py-4 rounded-lg bg-table-ready text-primary-foreground font-display font-semibold text-lg transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <CreditCard className="w-5 h-5" />
+            Cobrado — Liberar mesa
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Extracted menu selection view
+const MenuView = ({ table, onBack, menu, activeCategory, setActiveCategory, orderItems, addItem, updateQty, updateNote, editingNoteId, setEditingNoteId, newItemsTotal, sendOrder }: {
+  table: RestaurantTable;
+  onBack: () => void;
+  menu: MenuItem[];
+  activeCategory: MenuCategory;
+  setActiveCategory: (c: MenuCategory) => void;
+  orderItems: OrderItem[];
+  addItem: (item: MenuItem) => void;
+  updateQty: (id: string, delta: number) => void;
+  updateNote: (id: string, notes: string) => void;
+  editingNoteId: string | null;
+  setEditingNoteId: (id: string | null) => void;
+  newItemsTotal: number;
+  sendOrder: () => void;
+}) => {
   const filteredMenu = menu.filter(m => m.category === activeCategory);
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row">
-      {/* Left: Menu */}
       <div className="flex-1 flex flex-col">
         <div className="flex items-center gap-3 px-4 pt-4 pb-2">
           <button onClick={onBack} className="touch-target p-2 rounded-lg hover:bg-muted transition-colors">
@@ -89,18 +232,10 @@ const OrderPanel = ({ table, onBack }: Props) => {
           </button>
           <div>
             <h2 className="font-display font-semibold text-lg text-foreground">{table.name}</h2>
-            <p className="text-xs text-muted-foreground">{table.capacity} personas</p>
+            <p className="text-xs text-muted-foreground">Agregar ítems</p>
           </div>
         </div>
 
-        {existingOrder && (
-          <div className="mx-4 mb-2 p-3 rounded-lg bg-info/10 border border-info/30">
-            <p className="text-sm text-foreground font-medium">Pedido activo: {existingOrder.status.replace('_', ' ')}</p>
-            <p className="text-xs text-muted-foreground">{existingOrder.items.length} ítems</p>
-          </div>
-        )}
-
-        {/* Category tabs */}
         <div className="flex gap-1 px-4 overflow-x-auto pb-2">
           {categories.map(cat => (
             <button
@@ -117,7 +252,6 @@ const OrderPanel = ({ table, onBack }: Props) => {
           ))}
         </div>
 
-        {/* Menu items */}
         <div className="flex-1 overflow-y-auto px-4 pb-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
             {filteredMenu.map(item => {
@@ -127,9 +261,7 @@ const OrderPanel = ({ table, onBack }: Props) => {
                   key={item.id}
                   onClick={() => addItem(item)}
                   className={`touch-target text-left p-4 rounded-lg border transition-all duration-150 active:scale-[0.97] ${
-                    inOrder
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border bg-card hover:border-primary/40'
+                    inOrder ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/40'
                   }`}
                 >
                   <div className="flex justify-between items-start">
@@ -139,9 +271,7 @@ const OrderPanel = ({ table, onBack }: Props) => {
                     </div>
                     <div className="text-right ml-2">
                       <div className="font-display font-semibold text-foreground">${item.price.toLocaleString()}</div>
-                      {inOrder && (
-                        <div className="text-xs font-medium text-primary mt-0.5">×{inOrder.quantity}</div>
-                      )}
+                      {inOrder && <div className="text-xs font-medium text-primary mt-0.5">×{inOrder.quantity}</div>}
                     </div>
                   </div>
                 </button>
@@ -151,10 +281,10 @@ const OrderPanel = ({ table, onBack }: Props) => {
         </div>
       </div>
 
-      {/* Right: Order summary */}
+      {/* Order summary sidebar */}
       <div className="lg:w-80 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col">
         <div className="p-4 border-b border-border">
-          <h3 className="font-display font-semibold text-foreground">Pedido</h3>
+          <h3 className="font-display font-semibold text-foreground">Nuevos ítems</h3>
           <p className="text-xs text-muted-foreground">{orderItems.length} ítems</p>
         </div>
 
@@ -199,11 +329,10 @@ const OrderPanel = ({ table, onBack }: Props) => {
           )}
         </div>
 
-        {/* Total & Send */}
         <div className="p-4 border-t border-border space-y-3">
           <div className="flex justify-between items-center">
-            <span className="font-display font-semibold text-foreground">Total</span>
-            <span className="font-display font-bold text-xl text-primary">${total.toLocaleString()}</span>
+            <span className="font-display font-semibold text-foreground">Total nuevos</span>
+            <span className="font-display font-bold text-xl text-primary">${newItemsTotal.toLocaleString()}</span>
           </div>
           <button
             onClick={sendOrder}

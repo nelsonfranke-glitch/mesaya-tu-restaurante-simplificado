@@ -13,7 +13,10 @@ interface AppState {
   logout: () => void;
   updateTableStatus: (tableId: string, status: TableStatus) => void;
   addOrder: (order: Order) => void;
+  addItemsToTable: (tableId: string, items: OrderItem[]) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  requestBill: (tableId: string) => void;
+  markPaid: (tableId: string) => void;
   addNotification: (msg: string) => void;
   clearNotification: (index: number) => void;
 }
@@ -53,17 +56,58 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     updateTableStatus(order.tableId, 'occupied');
   };
 
+  // Add more items to an existing table (creates a new order linked to same table)
+  const addItemsToTable = (tableId: string, items: OrderItem[]) => {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
+    const newOrder: Order = {
+      id: `o-${Date.now()}`,
+      tableId,
+      tableName: table.name,
+      waiterId: currentUser?.id || '',
+      waiterName: currentUser?.name || '',
+      items,
+      status: 'nuevo',
+      createdAt: new Date(),
+    };
+    setOrders(prev => [...prev, newOrder]);
+    // Table goes back to occupied when new items are added
+    updateTableStatus(tableId, 'occupied');
+  };
+
+  // Kitchen only changes ORDER status, never table status
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
       const updated = { ...o, status };
-      if (status === 'en_preparacion') updateTableStatus(o.tableId, 'cooking');
+      // When kitchen marks order as "listo", notify waiter but DON'T change table
       if (status === 'listo') {
-        updateTableStatus(o.tableId, 'ready');
-        addNotification(`¡Pedido de ${o.tableName} listo!`);
+        addNotification(`¡Pedido de ${o.tableName} listo para servir!`);
       }
-      if (status === 'pagado') updateTableStatus(o.tableId, 'free');
       return updated;
+    }));
+  };
+
+  // Waiter requests bill - changes table status
+  const requestBill = (tableId: string) => {
+    updateTableStatus(tableId, 'bill_requested');
+    // Mark all active orders for this table as "entregado" 
+    setOrders(prev => prev.map(o => {
+      if (o.tableId === tableId && o.status !== 'pagado') {
+        return { ...o, status: 'entregado' as OrderStatus };
+      }
+      return o;
+    }));
+  };
+
+  // Waiter marks as paid - frees table
+  const markPaid = (tableId: string) => {
+    updateTableStatus(tableId, 'free');
+    setOrders(prev => prev.map(o => {
+      if (o.tableId === tableId && o.status !== 'pagado') {
+        return { ...o, status: 'pagado' as OrderStatus };
+      }
+      return o;
     }));
   };
 
@@ -73,7 +117,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       currentUser, tables, menu, orders, ingredients, notifications,
-      login, logout, updateTableStatus, addOrder, updateOrderStatus, addNotification, clearNotification,
+      login, logout, updateTableStatus, addOrder, addItemsToTable,
+      updateOrderStatus, requestBill, markPaid, addNotification, clearNotification,
     }}>
       {children}
     </AppContext.Provider>
