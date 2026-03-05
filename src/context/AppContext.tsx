@@ -41,7 +41,7 @@ const demoUsers: Record<UserRole, User> = {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tables, setTables] = useState<RestaurantTable[]>(mockTables);
-  const [menu] = useState<MenuItem[]>(mockMenu);
+  const [menu, setMenu] = useState<MenuItem[]>(mockMenu);
   const [orders, setOrders] = useState<Order[]>(mockOrders);
   const [ingredients] = useState<Ingredient[]>(mockIngredients);
   const [notifications, setNotifications] = useState<string[]>([]);
@@ -113,6 +113,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  const updateItemDeliveryStatus = (orderId: string, itemId: string, status: ItemDeliveryStatus) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      return { ...o, items: o.items.map(item => item.id === itemId ? { ...item, deliveryStatus: status } : item) };
+    }));
+  };
+
+  const toggleMenuItemKitchen = (menuItemId: string) => {
+    setMenu(prev => prev.map(m => m.id === menuItemId ? { ...m, goesToKitchen: !m.goesToKitchen } : m));
+  };
+
   const addNotification = (msg: string) => setNotifications(prev => [...prev, msg]);
   const clearNotification = (index: number) => setNotifications(prev => prev.filter((_, i) => i !== index));
 
@@ -120,7 +131,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     <AppContext.Provider value={{
       currentUser, tables, menu, orders, ingredients, notifications,
       login, logout, updateTableStatus, addOrder, addItemsToTable,
-      updateOrderStatus, requestBill, markPaid, addNotification, clearNotification,
+      updateOrderStatus, updateItemDeliveryStatus, toggleMenuItemKitchen,
+      requestBill, markPaid, addNotification, clearNotification,
     }}>
       {children}
     </AppContext.Provider>
