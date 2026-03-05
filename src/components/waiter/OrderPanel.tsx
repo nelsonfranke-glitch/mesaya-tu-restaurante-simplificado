@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { RestaurantTable, MenuItem, OrderItem, MenuCategory } from '@/types';
-import { ArrowLeft, Minus, Plus, Send, MessageSquare, Receipt, PlusCircle, Check, ChefHat, Hand } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Send, MessageSquare, Receipt, PlusCircle, Check, ChefHat, Hand, AlertTriangle, Clock } from 'lucide-react';
 import BillModal from '@/components/waiter/BillModal';
 
 const categories: { key: MenuCategory; label: string }[] = [
@@ -15,6 +15,39 @@ interface Props {
   table: RestaurantTable;
   onBack: () => void;
 }
+
+const deliveryBadge = (item: OrderItem, onToggle: () => void) => {
+  const s = item.deliveryStatus;
+  switch (s) {
+    case 'nuevo':
+      return (
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 bg-table-occupied/20 text-table-occupied">
+          <Clock className="w-3 h-3" /> Nuevo
+        </span>
+      );
+    case 'en_preparacion':
+      return (
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 bg-table-cooking/20 text-table-cooking">
+          <ChefHat className="w-3 h-3" /> Preparando
+        </span>
+      );
+    case 'para_entregar':
+      return (
+        <button
+          onClick={onToggle}
+          className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 bg-orange-500/20 text-orange-500 transition-colors hover:bg-orange-500/30"
+        >
+          <Hand className="w-3 h-3" /> Para entregar
+        </button>
+      );
+    case 'entregado':
+      return (
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 bg-table-ready/20 text-table-ready">
+          <Check className="w-3 h-3" /> Entregado
+        </span>
+      );
+  }
+};
 
 const OrderPanel = ({ table, onBack }: Props) => {
   const { menu, addOrder, addItemsToTable, currentUser, orders, updateItemDeliveryStatus } = useApp();
@@ -34,13 +67,22 @@ const OrderPanel = ({ table, onBack }: Props) => {
   const runningTotal = allOrderedItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
   const newItemsTotal = orderItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
 
+  // Count items ready to deliver
+  const readyCount = allOrderedItems.filter(i => i.deliveryStatus === 'para_entregar').length;
+
   const addItem = (item: MenuItem) => {
     setOrderItems(prev => {
       const existing = prev.find(oi => oi.menuItem.id === item.id);
       if (existing) {
         return prev.map(oi => oi.menuItem.id === item.id ? { ...oi, quantity: oi.quantity + 1 } : oi);
       }
-      return [...prev, { id: `new-${Date.now()}-${item.id}`, menuItem: item, quantity: 1, notes: '', deliveryStatus: 'pendiente' as const }];
+      return [...prev, {
+        id: `new-${Date.now()}-${item.id}`,
+        menuItem: item,
+        quantity: 1,
+        notes: '',
+        deliveryStatus: item.goesToKitchen ? 'nuevo' as const : 'para_entregar' as const,
+      }];
     });
   };
 
@@ -126,23 +168,22 @@ const OrderPanel = ({ table, onBack }: Props) => {
         </div>
       </div>
 
+      {/* Banner: items ready to deliver */}
+      {readyCount > 0 && (
+        <div className="mx-4 mt-3 px-4 py-3 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+          <span className="text-sm font-semibold text-orange-500">
+            ⚠️ Tenés {readyCount} plato{readyCount > 1 ? 's' : ''} listo{readyCount > 1 ? 's' : ''} para llevar
+          </span>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {tableOrders.map(order => (
           <div key={order.id} className="rounded-lg border border-border bg-card p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-muted-foreground">
                 {order.createdAt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                order.status === 'nuevo' ? 'bg-table-occupied/20 text-table-occupied' :
-                order.status === 'en_preparacion' ? 'bg-table-cooking/20 text-table-cooking' :
-                order.status === 'listo' ? 'bg-table-ready/20 text-table-ready' :
-                'bg-muted text-muted-foreground'
-              }`}>
-                {order.status === 'nuevo' ? 'Nuevo' :
-                 order.status === 'en_preparacion' ? 'En preparación' :
-                 order.status === 'listo' ? '✅ Listo' :
-                 order.status === 'entregado' ? 'Entregado' : order.status}
               </span>
             </div>
             {order.items.map(item => (
@@ -154,32 +195,11 @@ const OrderPanel = ({ table, onBack }: Props) => {
                   </span>
                 </div>
 
-                {/* Delivery status badge */}
-                {item.menuItem.goesToKitchen ? (
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 ${
-                    order.status === 'listo' ? 'bg-table-ready/20 text-table-ready' :
-                    order.status === 'en_preparacion' ? 'bg-table-cooking/20 text-table-cooking' :
-                    'bg-table-occupied/20 text-table-occupied'
-                  }`}>
-                    <ChefHat className="w-3 h-3" />
-                    {order.status === 'listo' ? 'Listo' : order.status === 'en_preparacion' ? 'Preparando' : 'Nuevo'}
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => updateItemDeliveryStatus(order.id, item.id, item.deliveryStatus === 'pendiente' ? 'entregado' : 'pendiente')}
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1 transition-colors ${
-                      item.deliveryStatus === 'entregado'
-                        ? 'bg-table-ready/20 text-table-ready'
-                        : 'bg-primary/15 text-primary'
-                    }`}
-                  >
-                    {item.deliveryStatus === 'entregado' ? (
-                      <><Check className="w-3 h-3" /> Entregado</>
-                    ) : (
-                      <><Hand className="w-3 h-3" /> Para entregar</>
-                    )}
-                  </button>
-                )}
+                {deliveryBadge(item, () => {
+                  if (item.deliveryStatus === 'para_entregar') {
+                    updateItemDeliveryStatus(order.id, item.id, 'entregado');
+                  }
+                })}
 
                 <span className="text-sm font-display text-foreground whitespace-nowrap">
                   ${(item.menuItem.price * item.quantity).toLocaleString()}

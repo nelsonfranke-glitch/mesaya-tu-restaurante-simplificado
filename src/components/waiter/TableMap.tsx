@@ -15,7 +15,7 @@ interface Props {
 }
 
 const TableMap = ({ onSelectTable }: Props) => {
-  const { tables } = useApp();
+  const { tables, getReadyItemsCount } = useApp();
 
   return (
     <div className="flex-1 p-4">
@@ -31,12 +31,18 @@ const TableMap = ({ onSelectTable }: Props) => {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {tables.map(table => {
           const config = statusConfig[table.status];
+          const readyCount = getReadyItemsCount(table.id);
           return (
             <button
               key={table.id}
               onClick={() => onSelectTable(table)}
-              className={`touch-target p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${config.className}`}
+              className={`touch-target relative p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${config.className}`}
             >
+              {readyCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] rounded-full bg-orange-500 text-white text-[11px] font-bold flex items-center justify-center px-1 shadow-md">
+                  {readyCount}
+                </span>
+              )}
               <div className="font-display font-semibold text-base">{table.name}</div>
               <div className="flex items-center gap-1 mt-1">
                 <Users className="w-3.5 h-3.5 text-muted-foreground" />

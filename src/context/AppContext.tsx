@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { User, UserRole, RestaurantTable, MenuItem, Order, OrderItem, Ingredient, TableStatus, OrderStatus, ItemDeliveryStatus } from '@/types';
 import { mockTables, mockMenu, mockOrders, mockIngredients } from '@/data/mock';
 
@@ -21,6 +21,7 @@ interface AppState {
   markPaid: (tableId: string) => void;
   addNotification: (msg: string) => void;
   clearNotification: (index: number) => void;
+  getReadyItemsCount: (tableId: string) => number;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -36,6 +37,31 @@ const demoUsers: Record<UserRole, User> = {
   manager: { id: 'u2', name: 'Ana (Encargada)', role: 'manager', restaurantId: 'r1' },
   waiter: { id: 'u3', name: 'Carlos (Mozo)', role: 'waiter', restaurantId: 'r1' },
   kitchen: { id: 'u4', name: 'Diego (Cocina)', role: 'kitchen', restaurantId: 'r1' },
+};
+
+// Play a short notification beep
+const playNotificationSound = () => {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch { /* silent fallback */ }
+};
+
+const showBrowserNotification = (msg: string) => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('MesaYa', { body: msg, icon: '/favicon.ico' });
+  } else if ('Notification' in window && Notification.permission !== 'denied') {
+    Notification.requestPermission();
+  }
 };
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -54,46 +80,72 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addOrder = (order: Order) => {
-    setOrders(prev => [...prev, order]);
+    // Set initial deliveryStatus based on goesToKitchen
+    const itemsWithStatus = order.items.map(item => ({
+      ...item,
+      deliveryStatus: item.menuItem.goesToKitchen ? 'nuevo' as const : 'para_entregar' as const,
+    }));
+    setOrders(prev => [...prev, { ...order, items: itemsWithStatus }]);
     updateTableStatus(order.tableId, 'occupied');
   };
 
-  // Add more items to an existing table (creates a new order linked to same table)
   const addItemsToTable = (tableId: string, items: OrderItem[]) => {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
+    const itemsWithStatus = items.map(item => ({
+      ...item,
+      deliveryStatus: item.menuItem.goesToKitchen ? 'nuevo' as const : 'para_entregar' as const,
+    }));
     const newOrder: Order = {
       id: `o-${Date.now()}`,
       tableId,
       tableName: table.name,
       waiterId: currentUser?.id || '',
       waiterName: currentUser?.name || '',
-      items,
+      items: itemsWithStatus,
       status: 'nuevo',
       createdAt: new Date(),
     };
     setOrders(prev => [...prev, newOrder]);
-    // Table goes back to occupied when new items are added
     updateTableStatus(tableId, 'occupied');
   };
 
-  // Kitchen only changes ORDER status, never table status
+  // Kitchen changes ORDER status and updates per-item deliveryStatus
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
-      const updated = { ...o, status };
-      // When kitchen marks order as "listo", notify waiter but DON'T change table
-      if (status === 'listo') {
-        addNotification(`¡Pedido de ${o.tableName} listo para servir!`);
+
+      let updatedItems = o.items;
+
+      if (status === 'en_preparacion') {
+        // Mark kitchen items as en_preparacion
+        updatedItems = o.items.map(item =>
+          item.menuItem.goesToKitchen && item.deliveryStatus === 'nuevo'
+            ? { ...item, deliveryStatus: 'en_preparacion' as const }
+            : item
+        );
       }
-      return updated;
+
+      if (status === 'listo') {
+        // Kitchen marks done → items become "para_entregar" for waiter
+        updatedItems = o.items.map(item =>
+          item.menuItem.goesToKitchen && item.deliveryStatus !== 'entregado'
+            ? { ...item, deliveryStatus: 'para_entregar' as const }
+            : item
+        );
+        // Notifications
+        const msg = `¡Pedido de ${o.tableName} listo para servir!`;
+        addNotification(msg);
+        playNotificationSound();
+        showBrowserNotification(msg);
+      }
+
+      return { ...o, status, items: updatedItems };
     }));
   };
 
-  // Waiter requests bill - changes table status
   const requestBill = (tableId: string) => {
     updateTableStatus(tableId, 'bill_requested');
-    // Mark all active orders for this table as "entregado" 
     setOrders(prev => prev.map(o => {
       if (o.tableId === tableId && o.status !== 'pagado') {
         return { ...o, status: 'entregado' as OrderStatus };
@@ -102,7 +154,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
-  // Waiter marks as paid - frees table
   const markPaid = (tableId: string) => {
     updateTableStatus(tableId, 'free');
     setOrders(prev => prev.map(o => {
@@ -127,12 +178,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addNotification = (msg: string) => setNotifications(prev => [...prev, msg]);
   const clearNotification = (index: number) => setNotifications(prev => prev.filter((_, i) => i !== index));
 
+  const getReadyItemsCount = useCallback((tableId: string) => {
+    return orders
+      .filter(o => o.tableId === tableId && o.status !== 'pagado')
+      .flatMap(o => o.items)
+      .filter(item => item.deliveryStatus === 'para_entregar')
+      .length;
+  }, [orders]);
+
   return (
     <AppContext.Provider value={{
       currentUser, tables, menu, orders, ingredients, notifications,
       login, logout, updateTableStatus, addOrder, addItemsToTable,
       updateOrderStatus, updateItemDeliveryStatus, toggleMenuItemKitchen,
-      requestBill, markPaid, addNotification, clearNotification,
+      requestBill, markPaid, addNotification, clearNotification, getReadyItemsCount,
     }}>
       {children}
     </AppContext.Provider>
