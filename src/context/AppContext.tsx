@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { User, UserRole, RestaurantTable, MenuItem, Order, OrderItem, Ingredient, TableStatus, OrderStatus } from '@/types';
+import { User, UserRole, RestaurantTable, MenuItem, Order, OrderItem, Ingredient, TableStatus, OrderStatus, ItemDeliveryStatus } from '@/types';
 import { mockTables, mockMenu, mockOrders, mockIngredients } from '@/data/mock';
 
 interface AppState {
@@ -15,6 +15,8 @@ interface AppState {
   addOrder: (order: Order) => void;
   addItemsToTable: (tableId: string, items: OrderItem[]) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  updateItemDeliveryStatus: (orderId: string, itemId: string, status: ItemDeliveryStatus) => void;
+  toggleMenuItemKitchen: (menuItemId: string) => void;
   requestBill: (tableId: string) => void;
   markPaid: (tableId: string) => void;
   addNotification: (msg: string) => void;
