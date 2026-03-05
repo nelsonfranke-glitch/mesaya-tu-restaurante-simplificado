@@ -28,7 +28,7 @@ export interface MenuItem {
   goesToKitchen: boolean; // true = kitchen prepares, false = waiter handles directly
 }
 
-export type ItemDeliveryStatus = 'pendiente' | 'entregado';
+export type ItemDeliveryStatus = 'nuevo' | 'en_preparacion' | 'para_entregar' | 'entregado';
 
 export interface OrderItem {
   id: string;
