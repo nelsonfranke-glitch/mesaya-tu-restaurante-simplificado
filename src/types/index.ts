@@ -25,13 +25,17 @@ export interface MenuItem {
   price: number;
   description?: string;
   photo?: string;
+  goesToKitchen: boolean; // true = kitchen prepares, false = waiter handles directly
 }
+
+export type ItemDeliveryStatus = 'pendiente' | 'entregado';
 
 export interface OrderItem {
   id: string;
   menuItem: MenuItem;
   quantity: number;
   notes?: string;
+  deliveryStatus: ItemDeliveryStatus; // waiter-handled items track this
 }
 
 export type OrderStatus = 'nuevo' | 'en_preparacion' | 'listo' | 'pagado' | 'entregado';

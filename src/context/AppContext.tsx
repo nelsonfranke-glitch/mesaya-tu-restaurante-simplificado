@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { User, UserRole, RestaurantTable, MenuItem, Order, OrderItem, Ingredient, TableStatus, OrderStatus } from '@/types';
+import { User, UserRole, RestaurantTable, MenuItem, Order, OrderItem, Ingredient, TableStatus, OrderStatus, ItemDeliveryStatus } from '@/types';
 import { mockTables, mockMenu, mockOrders, mockIngredients } from '@/data/mock';
 
 interface AppState {
@@ -15,6 +15,8 @@ interface AppState {
   addOrder: (order: Order) => void;
   addItemsToTable: (tableId: string, items: OrderItem[]) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  updateItemDeliveryStatus: (orderId: string, itemId: string, status: ItemDeliveryStatus) => void;
+  toggleMenuItemKitchen: (menuItemId: string) => void;
   requestBill: (tableId: string) => void;
   markPaid: (tableId: string) => void;
   addNotification: (msg: string) => void;
@@ -39,7 +41,7 @@ const demoUsers: Record<UserRole, User> = {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tables, setTables] = useState<RestaurantTable[]>(mockTables);
-  const [menu] = useState<MenuItem[]>(mockMenu);
+  const [menu, setMenu] = useState<MenuItem[]>(mockMenu);
   const [orders, setOrders] = useState<Order[]>(mockOrders);
   const [ingredients] = useState<Ingredient[]>(mockIngredients);
   const [notifications, setNotifications] = useState<string[]>([]);
@@ -111,6 +113,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  const updateItemDeliveryStatus = (orderId: string, itemId: string, status: ItemDeliveryStatus) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      return { ...o, items: o.items.map(item => item.id === itemId ? { ...item, deliveryStatus: status } : item) };
+    }));
+  };
+
+  const toggleMenuItemKitchen = (menuItemId: string) => {
+    setMenu(prev => prev.map(m => m.id === menuItemId ? { ...m, goesToKitchen: !m.goesToKitchen } : m));
+  };
+
   const addNotification = (msg: string) => setNotifications(prev => [...prev, msg]);
   const clearNotification = (index: number) => setNotifications(prev => prev.filter((_, i) => i !== index));
 
@@ -118,7 +131,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     <AppContext.Provider value={{
       currentUser, tables, menu, orders, ingredients, notifications,
       login, logout, updateTableStatus, addOrder, addItemsToTable,
-      updateOrderStatus, requestBill, markPaid, addNotification, clearNotification,
+      updateOrderStatus, updateItemDeliveryStatus, toggleMenuItemKitchen,
+      requestBill, markPaid, addNotification, clearNotification,
     }}>
       {children}
     </AppContext.Provider>

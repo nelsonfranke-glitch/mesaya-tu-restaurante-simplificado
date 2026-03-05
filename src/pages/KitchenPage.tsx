@@ -23,9 +23,11 @@ const elapsed = (date: Date) => {
 const KitchenPage = () => {
   const { orders, updateOrderStatus, logout, currentUser } = useApp();
 
-  // Kitchen only sees orders that need attention (nuevo, en_preparacion, listo)
+  // Kitchen only sees orders that need attention, filtered to only kitchen items
   const activeOrders = orders
     .filter(o => ['nuevo', 'en_preparacion', 'listo'].includes(o.status))
+    .map(o => ({ ...o, items: o.items.filter(item => item.menuItem.goesToKitchen) }))
+    .filter(o => o.items.length > 0)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   return (
