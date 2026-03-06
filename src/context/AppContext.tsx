@@ -134,36 +134,53 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (hasKitchenItems) playKitchenNewOrderSound();
   };
 
-  // Kitchen changes ORDER status and updates per-item deliveryStatus
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  // Kitchen advances a single item: nuevo → en_preparacion → para_entregar (listo)
+  const updateKitchenItemStatus = (orderId: string, itemId: string) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
+      const updatedItems = o.items.map(item => {
+        if (item.id !== itemId || !item.menuItem.goesToKitchen) return item;
+        if (item.deliveryStatus === 'nuevo') return { ...item, deliveryStatus: 'en_preparacion' as const };
+        if (item.deliveryStatus === 'en_preparacion') return { ...item, deliveryStatus: 'para_entregar' as const };
+        return item;
+      });
 
-      let updatedItems = o.items;
+      // Derive order status from items
+      const kitchenItems = updatedItems.filter(i => i.menuItem.goesToKitchen);
+      const allDone = kitchenItems.every(i => i.deliveryStatus === 'para_entregar' || i.deliveryStatus === 'entregado');
+      const newStatus = allDone ? 'listo' as const : kitchenItems.some(i => i.deliveryStatus === 'en_preparacion' || i.deliveryStatus === 'para_entregar') ? 'en_preparacion' as const : o.status;
 
-      if (status === 'en_preparacion') {
-        // Mark kitchen items as en_preparacion
-        updatedItems = o.items.map(item =>
-          item.menuItem.goesToKitchen && item.deliveryStatus === 'nuevo'
-            ? { ...item, deliveryStatus: 'en_preparacion' as const }
-            : item
-        );
-      }
-
-      if (status === 'listo') {
-        // Kitchen marks done → items become "para_entregar" for waiter
-        updatedItems = o.items.map(item =>
-          item.menuItem.goesToKitchen && item.deliveryStatus !== 'entregado'
-            ? { ...item, deliveryStatus: 'para_entregar' as const }
-            : item
-        );
-        // Notifications
-        const msg = `¡Pedido de ${o.tableName} listo para servir!`;
+      // Notify waiter when item becomes listo
+      const justBecameListo = updatedItems.some((item, idx) =>
+        item.deliveryStatus === 'para_entregar' && o.items[idx].deliveryStatus === 'en_preparacion'
+      );
+      if (justBecameListo) {
+        const msg = `¡Plato de ${o.tableName} listo para servir!`;
         addNotification(msg);
         playNotificationSound();
         showBrowserNotification(msg);
       }
 
+      return { ...o, status: newStatus, items: updatedItems };
+    }));
+  };
+
+  // Legacy: update entire order status
+  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      let updatedItems = o.items;
+      if (status === 'listo') {
+        updatedItems = o.items.map(item =>
+          item.menuItem.goesToKitchen && item.deliveryStatus !== 'entregado'
+            ? { ...item, deliveryStatus: 'para_entregar' as const }
+            : item
+        );
+        const msg = `¡Pedido de ${o.tableName} listo para servir!`;
+        addNotification(msg);
+        playNotificationSound();
+        showBrowserNotification(msg);
+      }
       return { ...o, status, items: updatedItems };
     }));
   };
