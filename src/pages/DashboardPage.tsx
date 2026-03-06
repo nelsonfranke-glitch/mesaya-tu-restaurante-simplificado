@@ -1,9 +1,10 @@
 import { useApp } from '@/context/AppContext';
-import { LogOut, DollarSign, ShoppingBag, Clock, Grid3X3, AlertTriangle, UtensilsCrossed, Settings } from 'lucide-react';
+import { LogOut, DollarSign, ShoppingBag, Clock, Grid3X3, AlertTriangle, UtensilsCrossed, Settings, Receipt } from 'lucide-react';
 import { useState } from 'react';
 import MenuManagement from '@/components/owner/MenuManagement';
 import InventoryManagement from '@/components/owner/InventoryManagement';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import BillModal from '@/components/waiter/BillModal';
 
 const hourlyData = [
   { hour: '11h', pedidos: 3 },
@@ -23,12 +24,62 @@ type Tab = 'dashboard' | 'menu' | 'inventory';
 const DashboardPage = () => {
   const { currentUser, logout, orders, tables, menu, ingredients } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [selectedBillTableId, setSelectedBillTableId] = useState<string | null>(null);
 
-  const completedOrders = orders.filter(o => o.status === 'listo' || o.status === 'pagado');
-  const totalSales = completedOrders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.menuItem.price * i.quantity, 0), 0);
+  const totalOrders = orders.length;
+  const cookedOrders = orders.filter(
+    o => o.status === 'listo' || o.status === 'entregado' || o.status === 'pagado',
+  );
+  const paidOrders = orders.filter(o => o.status === 'pagado');
+  const totalSales = paidOrders.reduce(
+    (sum, o) =>
+      sum +
+      o.items.reduce((s, i) => s + i.menuItem.price * i.quantity, 0),
+    0,
+  );
   const activeTables = tables.filter(t => t.status !== 'free').length;
   const avgPrepTime = 22;
   const lowStock = ingredients.filter(i => i.stockQty < i.minThreshold);
+  const pendingBillsCount = tables.filter(t => t.status === 'bill_requested').length;
+
+  const pendingBills = tables
+    .filter(t => t.status === 'bill_requested')
+    .map(table => {
+      const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'pagado');
+      if (tableOrders.length === 0) return null;
+      const baseOrder = tableOrders.reduce((acc: typeof tableOrders[0] | null, o) => {
+        if (!acc) return o;
+        const accTime = acc.billRequestedAt ?? acc.createdAt;
+        const oTime = o.billRequestedAt ?? o.createdAt;
+        return oTime < accTime ? o : acc;
+      }, null as typeof tableOrders[0] | null);
+      if (!baseOrder) return null;
+      const requestedAt = baseOrder.billRequestedAt ?? baseOrder.createdAt;
+      const now = Date.now();
+      const diffMin = Math.floor((now - requestedAt.getTime()) / 60000);
+      let timerClass = 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40';
+      let timerLabel = `${diffMin} min`;
+      if (diffMin < 0) {
+        timerLabel = '0 min';
+      } else if (diffMin >= 6 && diffMin <= 10) {
+        timerClass = 'bg-orange-500/15 text-orange-500 border border-orange-500/40';
+        timerLabel = `⚠️ ${diffMin} min`;
+      } else if (diffMin > 10) {
+        timerClass = 'bg-red-500/15 text-red-400 border border-red-500/50 animate-pulse-soft';
+        timerLabel = `⚠️ ${diffMin} min`;
+      }
+      const paymentType = baseOrder.paymentType ?? 'sin_especificar';
+      return {
+        table,
+        waiterName: baseOrder.waiterName,
+        paymentType,
+        requestedAt,
+        diffMin,
+        timerClass,
+        timerLabel,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x);
 
   // Top dishes
   const dishCount: Record<string, { name: string; count: number }> = {};
@@ -52,9 +103,21 @@ const DashboardPage = () => {
           <h1 className="font-display font-bold text-xl text-primary">MesaYa</h1>
           <p className="text-xs text-muted-foreground">{currentUser?.name}</p>
         </div>
-        <button onClick={logout} className="touch-target p-2 rounded-lg hover:bg-muted transition-colors">
-          <LogOut className="w-5 h-5 text-muted-foreground" />
-        </button>
+        <div className="flex items-center gap-3">
+          {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
+            <div className="relative flex items-center">
+              <Receipt className="w-5 h-5 text-muted-foreground" />
+              {pendingBillsCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center px-1 shadow-md">
+                  {pendingBillsCount}
+                </span>
+              )}
+            </div>
+          )}
+          <button onClick={logout} className="touch-target p-2 rounded-lg hover:bg-muted transition-colors">
+            <LogOut className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
       </header>
 
       {/* Tabs */}
@@ -83,10 +146,30 @@ const DashboardPage = () => {
             {/* KPI cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { icon: <DollarSign className="w-5 h-5" />, label: 'Ventas', value: `$${totalSales.toLocaleString()}`, color: 'text-success' },
-                { icon: <ShoppingBag className="w-5 h-5" />, label: 'Pedidos', value: completedOrders.length.toString(), color: 'text-info' },
-                { icon: <Clock className="w-5 h-5" />, label: 'Tiempo prom.', value: `${avgPrepTime} min`, color: 'text-warning' },
-                { icon: <Grid3X3 className="w-5 h-5" />, label: 'Mesas activas', value: `${activeTables}/${tables.length}`, color: 'text-primary' },
+                {
+                  icon: <DollarSign className="w-5 h-5" />,
+                  label: 'Ventas cobradas',
+                  value: `$${totalSales.toLocaleString()}`,
+                  color: 'text-success',
+                },
+                {
+                  icon: <ShoppingBag className="w-5 h-5" />,
+                  label: 'Pedidos totales',
+                  value: totalOrders.toString(),
+                  color: 'text-info',
+                },
+                {
+                  icon: <Clock className="w-5 h-5" />,
+                  label: 'Pedidos cocinados',
+                  value: cookedOrders.length.toString(),
+                  color: 'text-warning',
+                },
+                {
+                  icon: <Grid3X3 className="w-5 h-5" />,
+                  label: 'Mesas activas',
+                  value: `${activeTables}/${tables.length}`,
+                  color: 'text-primary',
+                },
               ].map((kpi, i) => (
                 <div key={i} className="p-4 rounded-lg bg-card border border-border">
                   <div className={`mb-2 ${kpi.color}`}>{kpi.icon}</div>
@@ -107,6 +190,61 @@ const DashboardPage = () => {
                   {lowStock.map(ing => (
                     <div key={ing.id} className="text-sm text-foreground">
                       <span className="font-medium">{ing.name}</span>: {ing.stockQty} {ing.unit} (mín: {ing.minThreshold})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && pendingBills.length > 0 && (
+              <div className="p-4 rounded-lg bg-card border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-display font-semibold text-foreground">Cuentas pendientes de cobro</h3>
+                  <span className="text-xs text-muted-foreground">{pendingBills.length} mesa(s)</span>
+                </div>
+                <div className="space-y-2">
+                  {pendingBills.map(entry => (
+                    <div
+                      key={entry.table.id}
+                      className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border px-3 py-2 ${
+                        entry.paymentType === 'tarjeta'
+                          ? 'border-orange-500 bg-orange-500/5'
+                          : 'border-border bg-background/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-foreground">
+                            {entry.table.name}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Mozo: {entry.waiterName || '—'}
+                          </span>
+                          {entry.paymentType === 'tarjeta' && (
+                            <span className="text-[11px] text-orange-500 font-semibold">
+                              Requiere encargado
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          {entry.paymentType === 'efectivo' && '💵 Efectivo'}
+                          {entry.paymentType === 'tarjeta' && '💳 Tarjeta / Factura'}
+                          {entry.paymentType === 'sin_especificar' && '📋 Sin especificar'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span
+                          className={`text-[11px] font-medium px-2 py-1 rounded-full ${entry.timerClass}`}
+                        >
+                          ⏱ {entry.timerLabel}
+                        </span>
+                        <button
+                          onClick={() => setSelectedBillTableId(entry.table.id)}
+                          className="px-2 py-1 rounded-md border border-border text-[11px] text-muted-foreground hover:bg-muted"
+                        >
+                          Ver ticket
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -150,6 +288,28 @@ const DashboardPage = () => {
         {activeTab === 'menu' && <MenuManagement />}
         {activeTab === 'inventory' && <InventoryManagement />}
       </div>
+
+      {selectedBillTableId && (() => {
+        const table = tables.find(t => t.id === selectedBillTableId);
+        if (!table) return null;
+        const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'pagado');
+        const total = tableOrders.reduce(
+          (sum, o) =>
+            sum +
+            o.items.reduce((s, i) => s + i.menuItem.price * i.quantity, 0),
+          0,
+        );
+        if (tableOrders.length === 0) return null;
+        return (
+          <BillModal
+            table={table}
+            orders={tableOrders}
+            total={total}
+            onClose={() => setSelectedBillTableId(null)}
+            onConfirm={() => setSelectedBillTableId(null)}
+          />
+        );
+      })()}
     </div>
   );
 };

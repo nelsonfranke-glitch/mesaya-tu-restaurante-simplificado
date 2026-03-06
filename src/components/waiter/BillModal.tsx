@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { RestaurantTable, Order, MenuCategory } from '@/types';
+import { RestaurantTable, Order, MenuCategory, PaymentType } from '@/types';
 import { X, Printer, CreditCard, CheckCircle2 } from 'lucide-react';
 
 interface Props {
@@ -21,7 +21,7 @@ const categoryLabels: Record<MenuCategory, string> = {
 const categoryOrder: MenuCategory[] = ['entradas', 'principales', 'postres', 'bebidas'];
 
 const BillModal = ({ table, orders, total, onClose, onConfirm }: Props) => {
-  const { requestBill, markPaid } = useApp();
+  const { markPaid, currentUser } = useApp();
   const [confirmed, setConfirmed] = useState(false);
 
   // Group items by category then by menuItem id
@@ -45,13 +45,17 @@ const BillModal = ({ table, orders, total, onClose, onConfirm }: Props) => {
   });
 
   const now = new Date();
+  const currentPaymentType: PaymentType | undefined = orders.find(o => o.paymentType)?.paymentType;
+  const isTarjeta = currentPaymentType === 'tarjeta';
+  const isWaiter = currentUser?.role === 'waiter';
+  const canConfirm = isWaiter ? !isTarjeta : true;
+  const waiterBlocked = isWaiter && isTarjeta;
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleConfirm = () => {
-    requestBill(table.id);
     markPaid(table.id);
     setConfirmed(true);
     setTimeout(() => {
@@ -165,11 +169,17 @@ const BillModal = ({ table, orders, total, onClose, onConfirm }: Props) => {
           </button>
           <button
             onClick={handleConfirm}
-            className="w-full py-4 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors active:scale-[0.98]"
+            disabled={!canConfirm}
+            className="w-full py-4 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CreditCard className="w-5 h-5" />
-            Confirmar cobro
+            {canConfirm ? 'Confirmar cobro' : 'A la espera de encargado'}
           </button>
+          {waiterBlocked && (
+            <p className="mt-1 text-[11px] text-center text-gray-500">
+              Encargado notificado para cobrar esta mesa.
+            </p>
+          )}
         </div>
       </div>
     </div>

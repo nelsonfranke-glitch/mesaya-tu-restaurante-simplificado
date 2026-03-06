@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { RestaurantTable, MenuItem, OrderItem, MenuCategory } from '@/types';
+import { RestaurantTable, MenuItem, OrderItem, MenuCategory, PaymentType } from '@/types';
 import { ArrowLeft, Minus, Plus, Send, MessageSquare, Receipt, PlusCircle, Check, ChefHat, Hand, AlertTriangle, Clock } from 'lucide-react';
 import BillModal from '@/components/waiter/BillModal';
 
@@ -50,13 +50,15 @@ const deliveryBadge = (item: OrderItem, onToggle: () => void) => {
 };
 
 const OrderPanel = ({ table, onBack }: Props) => {
-  const { menu, addOrder, addItemsToTable, currentUser, orders, updateItemDeliveryStatus } = useApp();
+  const { menu, addOrder, addItemsToTable, currentUser, orders, updateItemDeliveryStatus, requestBill } = useApp();
   const [activeCategory, setActiveCategory] = useState<MenuCategory>('entradas');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showBill, setShowBill] = useState(false);
+  const [showPaymentTypeModal, setShowPaymentTypeModal] = useState(false);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'pagado');
   const hasActiveOrders = tableOrders.length > 0;
@@ -167,6 +169,11 @@ const OrderPanel = ({ table, onBack }: Props) => {
           <p className="text-xs text-muted-foreground">{table.capacity} personas • {tableOrders.length} pedido(s) activo(s)</p>
         </div>
       </div>
+      {infoMessage && (
+        <div className="mx-4 mt-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/40 text-[11px] text-primary">
+          {infoMessage}
+        </div>
+      )}
 
       {/* Banner: items ready to deliver */}
       {readyCount > 0 && (
@@ -227,7 +234,9 @@ const OrderPanel = ({ table, onBack }: Props) => {
               Agregar más items
             </button>
             <button
-              onClick={() => setShowBill(true)}
+              onClick={() => {
+                setShowPaymentTypeModal(true);
+              }}
               className="touch-target flex-1 py-4 rounded-lg border-2 border-primary text-primary font-display font-semibold text-base transition-all hover:bg-primary/10 active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <Receipt className="w-5 h-5" />
@@ -244,6 +253,56 @@ const OrderPanel = ({ table, onBack }: Props) => {
           </button>
         )}
       </div>
+
+      {showPaymentTypeModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-card border border-border shadow-xl p-4 space-y-4">
+            <h3 className="font-display font-semibold text-lg text-foreground">
+              ¿Cómo van a pagar?
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Elegí el tipo de pago antes de cerrar la mesa.
+            </p>
+            <div className="space-y-2">
+              {[
+                { type: 'efectivo' as PaymentType, label: '💵 Efectivo', description: 'El mozo cobra directamente en mesa.' },
+                { type: 'tarjeta' as PaymentType, label: '💳 Tarjeta / Factura', description: 'El encargado debe acercarse a cobrar.' },
+                { type: 'sin_especificar' as PaymentType, label: '📋 Sin especificar', description: 'Queda pendiente para que el encargado defina.' },
+              ].map(option => (
+                <button
+                  key={option.type}
+                  onClick={() => {
+                    requestBill(table.id, option.type);
+                    setShowPaymentTypeModal(false);
+                    setShowBill(true);
+                    if (option.type === 'tarjeta') {
+                      setInfoMessage('Encargado notificado para cobrar');
+                    } else {
+                      setInfoMessage(null);
+                    }
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/60 hover:bg-primary/5 transition-colors flex flex-col gap-1"
+                >
+                  <span className="text-sm font-semibold text-foreground">
+                    {option.label}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {option.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => setShowPaymentTypeModal(false)}
+                className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showBill && (
         <BillModal

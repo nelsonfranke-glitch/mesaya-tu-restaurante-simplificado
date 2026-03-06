@@ -7,7 +7,13 @@ export interface User {
   restaurantId: string;
 }
 
-export type TableStatus = 'free' | 'occupied' | 'cooking' | 'ready' | 'bill_requested';
+export type TableStatus =
+  | 'free'
+  | 'occupied_waiting' // Ocupada: pedido tomado, esperando cocina
+  | 'cooking' // En preparación
+  | 'ready' // Listo para entregar
+  | 'occupied_all_served' // Ocupada ✓: todo entregado
+  | 'bill_requested';
 
 export interface RestaurantTable {
   id: string;
@@ -30,6 +36,8 @@ export interface MenuItem {
 
 export type ItemDeliveryStatus = 'nuevo' | 'en_preparacion' | 'para_entregar' | 'entregado';
 
+export type PaymentType = 'efectivo' | 'tarjeta' | 'sin_especificar';
+
 export interface OrderItem {
   id: string;
   menuItem: MenuItem;
@@ -49,6 +57,8 @@ export interface Order {
   items: OrderItem[];
   status: OrderStatus;
   createdAt: Date;
+  paymentType?: PaymentType;
+  billRequestedAt?: Date;
 }
 
 export interface Ingredient {

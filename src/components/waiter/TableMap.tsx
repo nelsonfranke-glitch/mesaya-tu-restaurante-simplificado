@@ -3,11 +3,31 @@ import { RestaurantTable, TableStatus } from '@/types';
 import { Users } from 'lucide-react';
 
 const statusConfig: Record<TableStatus, { label: string; className: string }> = {
-  free: { label: 'Libre', className: 'bg-table-free/20 border-table-free text-foreground' },
-  occupied: { label: 'Ocupada', className: 'bg-table-occupied/20 border-table-occupied text-foreground' },
-  cooking: { label: 'En preparación', className: 'bg-table-cooking/20 border-table-cooking text-foreground' },
-  ready: { label: 'Plato listo', className: 'bg-table-ready/20 border-table-ready text-foreground animate-pulse-soft' },
-  bill_requested: { label: 'Cuenta solicitada', className: 'bg-primary/20 border-primary text-foreground' },
+  free: {
+    label: 'Libre',
+    className: 'bg-table-free/20 border-table-free text-foreground',
+  },
+  occupied_waiting: {
+    label: 'A espera de cocina',
+    className: 'bg-table-occupied/20 border-table-occupied text-foreground',
+  },
+  cooking: {
+    label: 'En preparación',
+    className: 'bg-table-cooking/20 border-table-cooking text-foreground',
+  },
+  ready: {
+    label: 'Listo para entregar',
+    className: 'bg-table-ready/20 border-table-ready text-foreground animate-pulse-soft',
+  },
+  occupied_all_served: {
+    label: 'Ocupada',
+    className:
+      'bg-emerald-500/10 border-emerald-500 text-emerald-400',
+  },
+  bill_requested: {
+    label: 'Cuenta solicitada',
+    className: 'bg-red-500/20 border-red-500 text-red-400',
+  },
 };
 
 interface Props {

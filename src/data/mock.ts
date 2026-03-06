@@ -2,15 +2,15 @@ import { RestaurantTable, MenuItem, Order, Ingredient } from '@/types';
 
 export const mockTables: RestaurantTable[] = [
   { id: '1', name: 'Mesa 1', capacity: 2, status: 'free' },
-  { id: '2', name: 'Mesa 2', capacity: 4, status: 'occupied' },
-  { id: '3', name: 'Mesa 3', capacity: 4, status: 'cooking' },
-  { id: '4', name: 'Mesa 4', capacity: 6, status: 'ready' },
+  { id: '2', name: 'Mesa 2', capacity: 4, status: 'free' },
+  { id: '3', name: 'Mesa 3', capacity: 4, status: 'free' },
+  { id: '4', name: 'Mesa 4', capacity: 6, status: 'free' },
   { id: '5', name: 'Mesa 5', capacity: 2, status: 'free' },
   { id: '6', name: 'Mesa 6', capacity: 8, status: 'free' },
-  { id: '7', name: 'Mesa 7', capacity: 4, status: 'occupied' },
+  { id: '7', name: 'Mesa 7', capacity: 4, status: 'free' },
   { id: '8', name: 'Mesa 8', capacity: 2, status: 'free' },
   { id: '9', name: 'Barra 1', capacity: 1, status: 'free' },
-  { id: '10', name: 'Barra 2', capacity: 1, status: 'cooking' },
+  { id: '10', name: 'Barra 2', capacity: 1, status: 'free' },
   { id: '11', name: 'Terraza 1', capacity: 4, status: 'free' },
   { id: '12', name: 'Terraza 2', capacity: 6, status: 'free' },
 ];
@@ -35,76 +35,7 @@ export const mockMenu: MenuItem[] = [
   { id: 'm17', name: 'Limonada', category: 'bebidas', price: 900, goesToKitchen: false },
 ];
 
-export const mockOrders: Order[] = [
-  {
-    id: 'o1',
-    tableId: '2',
-    tableName: 'Mesa 2',
-    waiterId: 'w1',
-    waiterName: 'Carlos',
-    items: [
-      { id: 'oi1', menuItem: mockMenu[0], quantity: 1, notes: '', deliveryStatus: 'nuevo' },
-      { id: 'oi2', menuItem: mockMenu[4], quantity: 2, notes: 'Una sin sal', deliveryStatus: 'nuevo' },
-      { id: 'oi3', menuItem: mockMenu[12], quantity: 2, deliveryStatus: 'para_entregar' },
-    ],
-    status: 'nuevo',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000),
-  },
-  {
-    id: 'o2',
-    tableId: '3',
-    tableName: 'Mesa 3',
-    waiterId: 'w1',
-    waiterName: 'Carlos',
-    items: [
-      { id: 'oi4', menuItem: mockMenu[5], quantity: 1, notes: 'Bien cocido', deliveryStatus: 'en_preparacion' },
-      { id: 'oi5', menuItem: mockMenu[1], quantity: 1, deliveryStatus: 'en_preparacion' },
-      { id: 'oi6', menuItem: mockMenu[15], quantity: 2, deliveryStatus: 'para_entregar' },
-    ],
-    status: 'en_preparacion',
-    createdAt: new Date(Date.now() - 18 * 60 * 1000),
-  },
-  {
-    id: 'o3',
-    tableId: '7',
-    tableName: 'Mesa 7',
-    waiterId: 'w2',
-    waiterName: 'María',
-    items: [
-      { id: 'oi7', menuItem: mockMenu[6], quantity: 3, deliveryStatus: 'nuevo' },
-      { id: 'oi8', menuItem: mockMenu[14], quantity: 3, deliveryStatus: 'para_entregar' },
-    ],
-    status: 'nuevo',
-    createdAt: new Date(Date.now() - 2 * 60 * 1000),
-  },
-  {
-    id: 'o4',
-    tableId: '10',
-    tableName: 'Barra 2',
-    waiterId: 'w2',
-    waiterName: 'María',
-    items: [
-      { id: 'oi9', menuItem: mockMenu[9], quantity: 1, deliveryStatus: 'en_preparacion' },
-      { id: 'oi10', menuItem: mockMenu[16], quantity: 1, deliveryStatus: 'para_entregar' },
-    ],
-    status: 'en_preparacion',
-    createdAt: new Date(Date.now() - 12 * 60 * 1000),
-  },
-  {
-    id: 'o5',
-    tableId: '4',
-    tableName: 'Mesa 4',
-    waiterId: 'w1',
-    waiterName: 'Carlos',
-    items: [
-      { id: 'oi11', menuItem: mockMenu[7], quantity: 2, deliveryStatus: 'para_entregar' },
-      { id: 'oi12', menuItem: mockMenu[3], quantity: 1, deliveryStatus: 'para_entregar' },
-      { id: 'oi13', menuItem: mockMenu[13], quantity: 4, deliveryStatus: 'para_entregar' },
-    ],
-    status: 'listo',
-    createdAt: new Date(Date.now() - 35 * 60 * 1000),
-  },
-];
+export const mockOrders: Order[] = [];
 
 export const mockIngredients: Ingredient[] = [
   { id: 'i1', name: 'Milanesa de ternera', unit: 'unidades', stockQty: 15, minThreshold: 5 },

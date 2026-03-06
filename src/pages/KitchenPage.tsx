@@ -101,7 +101,7 @@ const playKitchenNewOrderSound = () => {
 };
 
 const KitchenPage = () => {
-  const { orders, updateItemDeliveryStatus, logout, currentUser } = useApp();
+  const { orders, updateKitchenItemStatus, logout, currentUser } = useApp();
 
   const [hiddenOrderIds, setHiddenOrderIds] = useState<string[]>([]);
   const [fadingOrderIds, setFadingOrderIds] = useState<string[]>([]);
@@ -232,7 +232,7 @@ const KitchenPage = () => {
                                     disabled={isDisabled}
                                     onClick={() => {
                                       if (!visual.next) return;
-                                      updateItemDeliveryStatus(order.id, item.id, visual.next);
+                                      updateKitchenItemStatus(order.id, item.id);
                                     }}
                                     className={`touch-target inline-flex items-center justify-center px-4 py-2.5 rounded-full font-display text-lg font-semibold transition-all w-full ${
                                       visual.bgClass
