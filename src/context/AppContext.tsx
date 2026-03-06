@@ -208,7 +208,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const updateItemDeliveryStatus = (orderId: string, itemId: string, status: ItemDeliveryStatus) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
-      return { ...o, items: o.items.map(item => item.id === itemId ? { ...item, deliveryStatus: status } : item) };
+
+      const orderBefore = o;
+      const itemBefore = orderBefore.items.find(item => item.id === itemId);
+
+      const updatedItems = orderBefore.items.map(item =>
+        item.id === itemId ? { ...item, deliveryStatus: status } : item,
+      );
+
+      const updatedOrder = { ...orderBefore, items: updatedItems };
+
+      // When a kitchen item becomes "para_entregar", notify waiter
+      if (
+        itemBefore &&
+        itemBefore.menuItem.goesToKitchen &&
+        itemBefore.deliveryStatus !== 'para_entregar' &&
+        status === 'para_entregar'
+      ) {
+        const msg = `¡Pedido de ${orderBefore.tableName} tiene platos listos para servir!`;
+        addNotification(msg);
+        playNotificationSound();
+        showBrowserNotification(msg);
+      }
+
+      return updatedOrder;
     }));
   };
 

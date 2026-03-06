@@ -1,177 +1,265 @@
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ItemDeliveryStatus } from '@/types';
-import { Clock, AlertTriangle, LogOut, CheckCircle2 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { Clock, LogOut } from 'lucide-react';
 
-const itemStatusConfig: Record<string, { label: string; bgClass: string; next: ItemDeliveryStatus | null }> = {
-  nuevo: { label: 'Nuevo', bgClass: 'bg-destructive', next: 'en_preparacion' },
-  en_preparacion: { label: 'En preparación', bgClass: 'bg-[hsl(210,80%,50%)]', next: 'para_entregar' },
-  para_entregar: { label: '✅ Listo', bgClass: 'bg-[hsl(142,70%,40%)]', next: null },
+type KitchenItemVisual = {
+  label: string;
+  bgClass: string;
+  textClass: string;
+  next: ItemDeliveryStatus | null;
 };
 
-const getElapsed = (date: Date) => Math.floor((Date.now() - date.getTime()) / 60000);
+const statusColors: Record<string, string> = {
+  nuevo: 'border-table-occupied',
+  en_preparacion: 'border-table-cooking',
+  listo: 'border-table-ready',
+};
 
-const formatElapsed = (mins: number) => mins < 1 ? '<1 min' : `${mins} min`;
+const getItemVisual = (status: ItemDeliveryStatus): KitchenItemVisual => {
+  switch (status) {
+    case 'nuevo':
+      return {
+        label: 'Nuevo',
+        bgClass: 'bg-destructive',
+        textClass: 'text-destructive-foreground',
+        next: 'en_preparacion',
+      };
+    case 'en_preparacion':
+      return {
+        label: 'En preparación',
+        bgClass: 'bg-info',
+        textClass: 'text-info-foreground',
+        next: 'para_entregar',
+      };
+    case 'para_entregar':
+    case 'entregado':
+    default:
+      return {
+        label: 'Listo',
+        bgClass: 'bg-success',
+        textClass: 'text-success-foreground',
+        next: null,
+      };
+  }
+};
 
-const getTimerStyle = (mins: number) => {
-  if (mins >= 15) return { color: 'hsl(0,80%,55%)', urgent: true };
-  if (mins >= 8) return { color: 'hsl(30,90%,55%)', urgent: false };
-  return { color: 'hsl(0,0%,85%)', urgent: false };
+const getElapsedInfo = (date: Date) => {
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  const label = mins < 1 ? '<1 min' : `${mins} min`;
+
+  if (mins <= 7) {
+    return {
+      label,
+      chipClass: 'bg-[hsl(220,15%,16%)] text-[hsl(220,10%,85%)]',
+      cardUrgencyClass: '',
+    };
+  }
+
+  if (mins <= 14) {
+    return {
+      label: `⚠️ ${label}`,
+      chipClass: 'bg-orange-500/10 border border-orange-500/40 text-orange-400',
+      cardUrgencyClass: '',
+    };
+  }
+
+  return {
+    label: `⚠️ ${label}`,
+    chipClass: 'bg-red-500/10 border border-red-500/50 text-red-400',
+    cardUrgencyClass: 'border-red-500 animate-pulse-soft',
+  };
+};
+
+const playKitchenNewOrderSound = () => {
+  try {
+    const ctx = new AudioContext();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'square';
+    osc2.type = 'triangle';
+    osc1.frequency.value = 660;
+    osc2.frequency.value = 990;
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    gain.gain.value = 0.25;
+
+    const now = ctx.currentTime;
+    osc1.start(now);
+    osc2.start(now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.stop(now + 0.4);
+    osc2.stop(now + 0.4);
+  } catch {
+    // silent fallback
+  }
 };
 
 const KitchenPage = () => {
-  const { orders, updateKitchenItemStatus, logout, currentUser } = useApp();
-  const [now, setNow] = useState(Date.now());
-  const [completedOrders, setCompletedOrders] = useState<Set<string>>(new Set());
-  const prevOrderCount = useRef(0);
+  const { orders, updateItemDeliveryStatus, logout, currentUser } = useApp();
 
-  // Tick every 15s to update timers
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(interval);
-  }, []);
+  const [hiddenOrderIds, setHiddenOrderIds] = useState<string[]>([]);
+  const [fadingOrderIds, setFadingOrderIds] = useState<string[]>([]);
+  const scheduledHideRef = useRef<Set<string>>(new Set());
+  const prevKitchenOrderIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
 
-  // Filter to active kitchen orders
-  const activeOrders = orders
+  // Kitchen only sees orders that need attention, filtered to only kitchen items
+  const kitchenOrders = orders
     .filter(o => ['nuevo', 'en_preparacion', 'listo'].includes(o.status))
     .map(o => ({ ...o, items: o.items.filter(item => item.menuItem.goesToKitchen) }))
     .filter(o => o.items.length > 0)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
-  // Detect completed orders (all items listo) and fade them out
+  const activeOrders = kitchenOrders.filter(o => !hiddenOrderIds.includes(o.id));
+
+  // Detect new kitchen orders to play sound
   useEffect(() => {
-    const newCompleted = new Set<string>();
-    activeOrders.forEach(order => {
-      const allListo = order.items.every(i => i.deliveryStatus === 'para_entregar' || i.deliveryStatus === 'entregado');
-      if (allListo) newCompleted.add(order.id);
-    });
-    if (newCompleted.size > 0) {
-      setCompletedOrders(newCompleted);
+    const currentIds = new Set(kitchenOrders.map(o => o.id));
+    const prevIds = prevKitchenOrderIdsRef.current;
+
+    if (isFirstLoadRef.current) {
+      isFirstLoadRef.current = false;
+      prevKitchenOrderIdsRef.current = currentIds;
+      return;
     }
-  }, [orders]);
 
-  // Count excluding completed
-  const visibleOrders = activeOrders.filter(o => !completedOrders.has(o.id) || 
-    // Show completed briefly
-    true
-  );
+    kitchenOrders.forEach(order => {
+      if (!prevIds.has(order.id)) {
+        playKitchenNewOrderSound();
+      }
+    });
 
-  const nonCompletedCount = activeOrders.filter(o => 
-    !o.items.every(i => i.deliveryStatus === 'para_entregar' || i.deliveryStatus === 'entregado')
-  ).length;
+    prevKitchenOrderIdsRef.current = currentIds;
+  }, [kitchenOrders]);
+
+  // When all items of an order are ready, show banner and fade out after 3s
+  useEffect(() => {
+    kitchenOrders.forEach(order => {
+      const allItemsReady =
+        order.items.length > 0 &&
+        order.items.every(item => item.deliveryStatus === 'para_entregar' || item.deliveryStatus === 'entregado');
+
+      if (allItemsReady && !scheduledHideRef.current.has(order.id)) {
+        scheduledHideRef.current.add(order.id);
+        setFadingOrderIds(prev => (prev.includes(order.id) ? prev : [...prev, order.id]));
+
+        setTimeout(() => {
+          setHiddenOrderIds(prev => (prev.includes(order.id) ? prev : [...prev, order.id]));
+        }, 3000);
+      }
+    });
+  }, [kitchenOrders]);
 
   return (
-    <div className="min-h-screen bg-[hsl(220,15%,6%)] text-foreground flex flex-col">
-      {/* Header */}
-      <header className="px-5 py-4 flex items-center justify-between border-b border-[hsl(220,15%,16%)] bg-[hsl(220,15%,8%)]">
+    <div className="min-h-screen bg-[hsl(220,15%,8%)] text-[hsl(0,0%,95%)] flex flex-col">
+      <header className="px-4 py-3 flex items-center justify-between border-b border-[hsl(220,15%,18%)]">
         <div>
-          <h1 className="font-display font-bold text-3xl text-primary">🔥 Cocina</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{currentUser?.name}</p>
+          <h1 className="font-display font-bold text-2xl text-primary">MesaYa</h1>
+          <p className="text-xs text-[hsl(220,10%,55%)]">Cocina — {currentUser?.name}</p>
         </div>
-        <div className="flex items-center gap-5">
-          <div className="text-center">
-            <div className="text-3xl font-display font-bold text-primary">{nonCompletedCount}</div>
-            <div className="text-xs text-muted-foreground">pedidos activos</div>
-          </div>
-          <button onClick={logout} className="p-3 rounded-xl hover:bg-[hsl(220,15%,14%)] transition-colors">
-            <LogOut className="w-6 h-6 text-muted-foreground" />
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-[hsl(220,10%,55%)]">{activeOrders.length} pedidos activos</span>
+          <button onClick={logout} className="touch-target p-2 rounded-lg hover:bg-[hsl(220,15%,16%)] transition-colors">
+            <LogOut className="w-5 h-5 text-[hsl(220,10%,55%)]" />
           </button>
         </div>
       </header>
 
-      {/* Orders Grid */}
       <div className="flex-1 p-4 overflow-y-auto">
         {activeOrders.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-3xl text-[hsl(220,10%,30%)] font-display">Sin pedidos activos</p>
+            <p className="text-2xl text-[hsl(220,10%,35%)] font-display">Sin pedidos activos</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {activeOrders.map(order => {
-              const mins = getElapsed(order.createdAt);
-              const timer = getTimerStyle(mins);
-              const allListo = order.items.every(i => i.deliveryStatus === 'para_entregar' || i.deliveryStatus === 'entregado');
-
-              const borderColor = mins >= 15
-                ? 'border-destructive'
-                : allListo
-                  ? 'border-[hsl(142,70%,40%)]'
-                  : 'border-[hsl(220,15%,22%)]';
-
+              const elapsedInfo = getElapsedInfo(order.createdAt);
+              const allItemsReady =
+                order.items.length > 0 &&
+                order.items.every(item => item.deliveryStatus === 'para_entregar' || item.deliveryStatus === 'entregado');
               return (
                 <div
                   key={order.id}
-                  className={`rounded-2xl border-2 ${borderColor} bg-[hsl(220,15%,10%)] flex flex-col transition-all duration-500 ${
-                    mins >= 15 && !allListo ? 'animate-pulse' : ''
-                  } ${allListo ? 'opacity-60' : ''}`}
-                  style={allListo ? { transition: 'opacity 3s ease-out' } : undefined}
+                  className={`rounded-2xl border-2 ${
+                    statusColors[order.status] || 'border-border'
+                  } ${elapsedInfo.cardUrgencyClass} bg-[hsl(220,15%,12%)] flex flex-col shadow-lg transition-all duration-300 ${
+                    fadingOrderIds.includes(order.id) ? 'animate-kitchen-fade-out-soft' : ''
+                  }`}
                 >
-                  {/* Card Header */}
-                  <div className="px-5 py-4 border-b border-[hsl(220,15%,16%)] flex items-center justify-between">
+                  <div className="px-5 py-4 border-b border-[hsl(220,15%,18%)] flex items-center justify-between">
                     <div>
-                      <div className="font-display font-bold text-white" style={{ fontSize: '28px' }}>{order.tableName}</div>
-                      <div className="text-sm text-[hsl(220,10%,70%)]">Mozo: {order.waiterName}</div>
+                      <div className="font-display font-bold text-3xl tracking-tight">{order.tableName}</div>
+                      <div className="text-sm text-[hsl(220,10%,55%)] mt-1">Mozo: {order.waiterName}</div>
                     </div>
-                    <div className="flex items-center gap-2" style={{ color: timer.color }}>
-                      {mins >= 8 && <AlertTriangle className="w-6 h-6" />}
-                      <Clock className="w-5 h-5" />
-                      <span className="font-display font-bold text-xl">{formatElapsed(mins)}</span>
+                    <div
+                      className={`flex items-center gap-2 text-xs font-semibold rounded-full px-3 py-1 ${elapsedInfo.chipClass}`}
+                    >
+                      <Clock className="w-4 h-4" />
+                      <span className="text-base font-semibold leading-none">{elapsedInfo.label}</span>
                     </div>
                   </div>
 
-                  {/* Completed Banner */}
-                  {allListo && (
-                    <div className="px-5 py-3 bg-[hsl(142,70%,35%)] flex items-center gap-2">
-                      <CheckCircle2 className="w-6 h-6 text-white" />
-                      <span className="font-display font-bold text-lg text-white">✓ Pedido completo</span>
-                    </div>
-                  )}
-
-                  {/* Items */}
-                  <div className="flex-1 px-4 py-3 space-y-2">
-                    {order.items.map(item => {
-                      const status = itemStatusConfig[item.deliveryStatus] || itemStatusConfig.nuevo;
-                      const isListo = item.deliveryStatus === 'para_entregar';
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 rounded-xl bg-[hsl(220,15%,13%)] px-4 py-3"
-                        >
-                          {/* Quantity */}
-                          <span className="font-display font-bold text-primary shrink-0" style={{ fontSize: '28px' }}>
-                            {item.quantity}
-                          </span>
-
-                          {/* Item info */}
+                  <div className="flex-1 px-5 py-4 space-y-4">
+                    {order.items.map(item => (
+                      <div key={item.id} className="rounded-lg bg-[hsl(220,15%,16%)] px-4 py-3">
+                        <div className="flex items-start gap-3">
+                          <div className="flex flex-col items-center justify-center min-w-[56px]">
+                            <span className="font-display font-black text-orange-400 text-4xl leading-none">
+                              {item.quantity}
+                            </span>
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate text-white" style={{ fontSize: '22px' }}>
+                            <div className="text-2xl font-semibold leading-snug">
                               {item.menuItem.name}
                             </div>
                             {item.notes && (
-                              <div className="text-base italic text-[hsl(45,90%,55%)] mt-0.5">
-                                ⚠ {item.notes}
+                              <div className="mt-1 text-base text-yellow-300 italic">
+                                {item.notes}
                               </div>
                             )}
+                            <div className="mt-3">
+                              {(() => {
+                                const visual = getItemVisual(item.deliveryStatus);
+                                const isDisabled = visual.next === null;
+                                return (
+                                  <button
+                                    disabled={isDisabled}
+                                    onClick={() => {
+                                      if (!visual.next) return;
+                                      updateItemDeliveryStatus(order.id, item.id, visual.next);
+                                    }}
+                                    className={`touch-target inline-flex items-center justify-center px-4 py-2.5 rounded-full font-display text-lg font-semibold transition-all w-full ${
+                                      visual.bgClass
+                                    } ${visual.textClass} ${
+                                      isDisabled
+                                        ? 'opacity-70 cursor-default'
+                                        : 'hover:brightness-110 active:scale-[0.97]'
+                                    }`}
+                                  >
+                                    {visual.label}
+                                  </button>
+                                );
+                              })()}
+                            </div>
                           </div>
-
-                          {/* Status Button */}
-                          {status.next ? (
-                            <button
-                              onClick={() => updateKitchenItemStatus(order.id, item.id)}
-                              className={`${status.bgClass} text-white font-display font-bold text-base px-5 py-3 rounded-xl transition-all hover:opacity-85 active:scale-95 shrink-0`}
-                            >
-                              {status.label}
-                            </button>
-                          ) : (
-                            <span className={`${status.bgClass} text-white font-display font-bold text-base px-5 py-3 rounded-xl shrink-0 opacity-70`}>
-                              {status.label}
-                            </span>
-                          )}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
+
+                  {allItemsReady && (
+                    <div className="px-5 py-3 border-t border-[hsl(150,55%,35%)] bg-[hsl(150,55%,18%)]">
+                      <div className="text-center text-lg font-display font-semibold text-[hsl(150,55%,75%)]">
+                        ✓ Pedido completo
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

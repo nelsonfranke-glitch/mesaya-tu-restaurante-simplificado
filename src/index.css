@@ -118,6 +118,21 @@
   .touch-target {
     @apply min-h-[48px] min-w-[48px];
   }
+
+  @keyframes kitchen-fade-out-soft {
+    0% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  .animate-kitchen-fade-out-soft {
+    animation: kitchen-fade-out-soft 0.5s ease-out forwards;
+  }
 }
 
 /* Print styles for ticket */
