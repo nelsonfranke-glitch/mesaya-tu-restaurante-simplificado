@@ -119,3 +119,29 @@
     @apply min-h-[48px] min-w-[48px];
   }
 }
+
+/* Print styles for ticket */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #bill-ticket, #bill-ticket * {
+    visibility: visible !important;
+  }
+  #bill-ticket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm;
+    padding: 4mm;
+    font-size: 12px;
+    color: black !important;
+    background: white !important;
+  }
+  .print\\:hidden {
+    display: none !important;
+  }
+  .print\\:text-black {
+    color: black !important;
+  }
+}
