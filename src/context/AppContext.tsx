@@ -16,6 +16,7 @@ interface AppState {
   addItemsToTable: (tableId: string, items: OrderItem[]) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   updateItemDeliveryStatus: (orderId: string, itemId: string, status: ItemDeliveryStatus) => void;
+  updateKitchenItemStatus: (orderId: string, itemId: string) => void;
   toggleMenuItemKitchen: (menuItemId: string) => void;
   requestBill: (tableId: string) => void;
   markPaid: (tableId: string) => void;
@@ -39,7 +40,7 @@ const demoUsers: Record<UserRole, User> = {
   kitchen: { id: 'u4', name: 'Diego (Cocina)', role: 'kitchen', restaurantId: 'r1' },
 };
 
-// Play a short notification beep
+// Play a short notification beep (waiter)
 const playNotificationSound = () => {
   try {
     const ctx = new AudioContext();
@@ -53,6 +54,26 @@ const playNotificationSound = () => {
     osc.start();
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
     osc.stop(ctx.currentTime + 0.3);
+  } catch { /* silent fallback */ }
+};
+
+// Play a distinct sound for kitchen new order
+const playKitchenNewOrderSound = () => {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 523;
+    osc.type = 'square';
+    gain.gain.value = 0.25;
+    osc.start();
+    // Two-tone alert
+    setTimeout(() => { osc.frequency.value = 659; }, 150);
+    setTimeout(() => { osc.frequency.value = 784; }, 300);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.5);
   } catch { /* silent fallback */ }
 };
 
@@ -80,13 +101,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addOrder = (order: Order) => {
-    // Set initial deliveryStatus based on goesToKitchen
     const itemsWithStatus = order.items.map(item => ({
       ...item,
       deliveryStatus: item.menuItem.goesToKitchen ? 'nuevo' as const : 'para_entregar' as const,
     }));
+    const hasKitchenItems = itemsWithStatus.some(i => i.menuItem.goesToKitchen);
     setOrders(prev => [...prev, { ...order, items: itemsWithStatus }]);
     updateTableStatus(order.tableId, 'occupied');
+    if (hasKitchenItems) playKitchenNewOrderSound();
   };
 
   const addItemsToTable = (tableId: string, items: OrderItem[]) => {
@@ -106,40 +128,59 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       status: 'nuevo',
       createdAt: new Date(),
     };
+    const hasKitchenItems = itemsWithStatus.some(i => i.menuItem.goesToKitchen);
     setOrders(prev => [...prev, newOrder]);
     updateTableStatus(tableId, 'occupied');
+    if (hasKitchenItems) playKitchenNewOrderSound();
   };
 
-  // Kitchen changes ORDER status and updates per-item deliveryStatus
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  // Kitchen advances a single item: nuevo → en_preparacion → para_entregar (listo)
+  const updateKitchenItemStatus = (orderId: string, itemId: string) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
+      const updatedItems = o.items.map(item => {
+        if (item.id !== itemId || !item.menuItem.goesToKitchen) return item;
+        if (item.deliveryStatus === 'nuevo') return { ...item, deliveryStatus: 'en_preparacion' as const };
+        if (item.deliveryStatus === 'en_preparacion') return { ...item, deliveryStatus: 'para_entregar' as const };
+        return item;
+      });
 
-      let updatedItems = o.items;
+      // Derive order status from items
+      const kitchenItems = updatedItems.filter(i => i.menuItem.goesToKitchen);
+      const allDone = kitchenItems.every(i => i.deliveryStatus === 'para_entregar' || i.deliveryStatus === 'entregado');
+      const newStatus = allDone ? 'listo' as const : kitchenItems.some(i => i.deliveryStatus === 'en_preparacion' || i.deliveryStatus === 'para_entregar') ? 'en_preparacion' as const : o.status;
 
-      if (status === 'en_preparacion') {
-        // Mark kitchen items as en_preparacion
-        updatedItems = o.items.map(item =>
-          item.menuItem.goesToKitchen && item.deliveryStatus === 'nuevo'
-            ? { ...item, deliveryStatus: 'en_preparacion' as const }
-            : item
-        );
-      }
-
-      if (status === 'listo') {
-        // Kitchen marks done → items become "para_entregar" for waiter
-        updatedItems = o.items.map(item =>
-          item.menuItem.goesToKitchen && item.deliveryStatus !== 'entregado'
-            ? { ...item, deliveryStatus: 'para_entregar' as const }
-            : item
-        );
-        // Notifications
-        const msg = `¡Pedido de ${o.tableName} listo para servir!`;
+      // Notify waiter when item becomes listo
+      const justBecameListo = updatedItems.some((item, idx) =>
+        item.deliveryStatus === 'para_entregar' && o.items[idx].deliveryStatus === 'en_preparacion'
+      );
+      if (justBecameListo) {
+        const msg = `¡Plato de ${o.tableName} listo para servir!`;
         addNotification(msg);
         playNotificationSound();
         showBrowserNotification(msg);
       }
 
+      return { ...o, status: newStatus, items: updatedItems };
+    }));
+  };
+
+  // Legacy: update entire order status
+  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      let updatedItems = o.items;
+      if (status === 'listo') {
+        updatedItems = o.items.map(item =>
+          item.menuItem.goesToKitchen && item.deliveryStatus !== 'entregado'
+            ? { ...item, deliveryStatus: 'para_entregar' as const }
+            : item
+        );
+        const msg = `¡Pedido de ${o.tableName} listo para servir!`;
+        addNotification(msg);
+        playNotificationSound();
+        showBrowserNotification(msg);
+      }
       return { ...o, status, items: updatedItems };
     }));
   };
@@ -190,7 +231,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     <AppContext.Provider value={{
       currentUser, tables, menu, orders, ingredients, notifications,
       login, logout, updateTableStatus, addOrder, addItemsToTable,
-      updateOrderStatus, updateItemDeliveryStatus, toggleMenuItemKitchen,
+      updateOrderStatus, updateItemDeliveryStatus, updateKitchenItemStatus, toggleMenuItemKitchen,
       requestBill, markPaid, addNotification, clearNotification, getReadyItemsCount,
     }}>
       {children}
