@@ -109,8 +109,8 @@ const KitchenPage = () => {
                   {/* Card Header */}
                   <div className="px-5 py-4 border-b border-[hsl(220,15%,16%)] flex items-center justify-between">
                     <div>
-                      <div className="font-display font-bold" style={{ fontSize: '28px' }}>{order.tableName}</div>
-                      <div className="text-sm text-muted-foreground">Mozo: {order.waiterName}</div>
+                      <div className="font-display font-bold text-white" style={{ fontSize: '28px' }}>{order.tableName}</div>
+                      <div className="text-sm text-[hsl(220,10%,70%)]">Mozo: {order.waiterName}</div>
                     </div>
                     <div className="flex items-center gap-2" style={{ color: timer.color }}>
                       {mins >= 8 && <AlertTriangle className="w-6 h-6" />}
@@ -121,9 +121,9 @@ const KitchenPage = () => {
 
                   {/* Completed Banner */}
                   {allListo && (
-                    <div className="px-5 py-3 bg-[hsl(142,70%,40%)]/20 flex items-center gap-2">
-                      <CheckCircle2 className="w-6 h-6 text-[hsl(142,70%,50%)]" />
-                      <span className="font-display font-bold text-lg text-[hsl(142,70%,50%)]">✓ Pedido completo</span>
+                    <div className="px-5 py-3 bg-[hsl(142,70%,35%)] flex items-center gap-2">
+                      <CheckCircle2 className="w-6 h-6 text-white" />
+                      <span className="font-display font-bold text-lg text-white">✓ Pedido completo</span>
                     </div>
                   )}
 
@@ -145,7 +145,7 @@ const KitchenPage = () => {
 
                           {/* Item info */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate" style={{ fontSize: '22px' }}>
+                            <div className="font-semibold truncate text-white" style={{ fontSize: '22px' }}>
                               {item.menuItem.name}
                             </div>
                             {item.notes && (
