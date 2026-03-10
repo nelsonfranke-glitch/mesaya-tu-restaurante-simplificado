@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { RestaurantTable, MenuItem, OrderItem, MenuCategory, PaymentType } from '@/types';
+import { RestaurantTable, MenuItem, OrderItem, MenuCategory } from '@/types';
 import { ArrowLeft, Minus, Plus, Send, MessageSquare, Receipt, PlusCircle, Check, ChefHat, Hand, AlertTriangle, Clock } from 'lucide-react';
 import BillModal from '@/components/waiter/BillModal';
 
