@@ -245,55 +245,6 @@ const OrderPanel = ({ table, onBack }: Props) => {
         )}
       </div>
 
-      {showPaymentTypeModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-card border border-border shadow-xl p-4 space-y-4">
-            <h3 className="font-display font-semibold text-lg text-foreground">
-              ¿Cómo van a pagar?
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Elegí el tipo de pago antes de cerrar la mesa.
-            </p>
-            <div className="space-y-2">
-              {[
-                { type: 'efectivo' as PaymentType, label: '💵 Efectivo', description: 'El mozo cobra directamente en mesa.' },
-                { type: 'tarjeta' as PaymentType, label: '💳 Tarjeta / Factura', description: 'El encargado debe acercarse a cobrar.' },
-                { type: 'sin_especificar' as PaymentType, label: '📋 Sin especificar', description: 'Queda pendiente para que el encargado defina.' },
-              ].map(option => (
-                <button
-                  key={option.type}
-                  onClick={() => {
-                    requestBill(table.id, option.type);
-                    setShowPaymentTypeModal(false);
-                    setShowBill(true);
-                    if (option.type === 'tarjeta') {
-                      setInfoMessage('Encargado notificado para cobrar');
-                    } else {
-                      setInfoMessage(null);
-                    }
-                  }}
-                  className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/60 hover:bg-primary/5 transition-colors flex flex-col gap-1"
-                >
-                  <span className="text-sm font-semibold text-foreground">
-                    {option.label}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {option.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={() => setShowPaymentTypeModal(false)}
-                className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showBill && (
         <BillModal
