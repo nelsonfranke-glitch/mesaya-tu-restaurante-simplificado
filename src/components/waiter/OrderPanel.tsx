@@ -62,6 +62,8 @@ const OrderPanel = ({ table, onBack }: Props) => {
   const hasActiveOrders = tableOrders.length > 0;
   const isFreeTable = table.status === 'free';
   const isBillRequested = table.status === 'bill_requested';
+  const isWaitingManager = isBillRequested && tableOrders.some(o => o.paymentType === 'tarjeta');
+  const isWaiter = currentUser?.role === 'waiter';
 
   const allOrderedItems = tableOrders.flatMap(o => o.items);
   const runningTotal = allOrderedItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
@@ -217,7 +219,13 @@ const OrderPanel = ({ table, onBack }: Props) => {
           <span className="font-display font-bold text-2xl text-primary">${runningTotal.toLocaleString()}</span>
         </div>
 
-        {!isBillRequested ? (
+        {isWaiter && isWaitingManager ? (
+          <div className="text-center py-4 px-3 rounded-lg bg-muted border border-border">
+            <p className="text-base font-semibold text-muted-foreground">
+              ⏳ Encargado notificado. En espera de cobro.
+            </p>
+          </div>
+        ) : !isBillRequested ? (
           <div className="flex gap-2">
             <button
               onClick={() => setShowMenu(true)}
