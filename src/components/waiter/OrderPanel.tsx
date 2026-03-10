@@ -227,9 +227,7 @@ const OrderPanel = ({ table, onBack }: Props) => {
               Agregar más items
             </button>
             <button
-              onClick={() => {
-                setShowPaymentTypeModal(true);
-              }}
+              onClick={() => setShowBill(true)}
               className="touch-target flex-1 py-4 rounded-lg border-2 border-primary text-primary font-display font-semibold text-base transition-all hover:bg-primary/10 active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <Receipt className="w-5 h-5" />
