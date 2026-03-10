@@ -167,11 +167,6 @@ const OrderPanel = ({ table, onBack }: Props) => {
           <p className="text-xs text-muted-foreground">{table.capacity} personas • {tableOrders.length} pedido(s) activo(s)</p>
         </div>
       </div>
-      {infoMessage && (
-        <div className="mx-4 mt-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/40 text-[11px] text-primary">
-          {infoMessage}
-        </div>
-      )}
 
       {/* Banner: items ready to deliver */}
       {readyCount > 0 && (
