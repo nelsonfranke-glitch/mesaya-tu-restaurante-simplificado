@@ -50,7 +50,7 @@ const deliveryBadge = (item: OrderItem, onToggle: () => void) => {
 };
 
 const OrderPanel = ({ table, onBack }: Props) => {
-  const { menu, addOrder, addItemsToTable, currentUser, orders, updateItemDeliveryStatus, requestBill } = useApp();
+  const { menu, addOrder, addItemsToTable, currentUser, orders, updateItemDeliveryStatus } = useApp();
   const [activeCategory, setActiveCategory] = useState<MenuCategory>('entradas');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
