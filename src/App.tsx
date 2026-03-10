@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider, useApp } from "@/context/AppContext";
-import LoginPage from "@/pages/LoginPage";
+import AuthPage from "@/pages/AuthPage";
 import WaiterPage from "@/pages/WaiterPage";
 import KitchenPage from "@/pages/KitchenPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -11,9 +11,20 @@ import DashboardPage from "@/pages/DashboardPage";
 const queryClient = new QueryClient();
 
 const AppRouter = () => {
-  const { currentUser } = useApp();
+  const { currentUser, loading } = useApp();
 
-  if (!currentUser) return <LoginPage />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <h1 className="text-3xl font-display font-bold text-primary mb-2">MesaYa</h1>
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) return <AuthPage />;
 
   switch (currentUser.role) {
     case 'kitchen':
@@ -24,7 +35,7 @@ const AppRouter = () => {
     case 'waiter':
       return <WaiterPage />;
     default:
-      return <LoginPage />;
+      return <AuthPage />;
   }
 };
 
