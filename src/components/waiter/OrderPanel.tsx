@@ -219,7 +219,13 @@ const OrderPanel = ({ table, onBack }: Props) => {
           <span className="font-display font-bold text-2xl text-primary">${runningTotal.toLocaleString()}</span>
         </div>
 
-        {!isBillRequested ? (
+        {isWaiter && isWaitingManager ? (
+          <div className="text-center py-4 px-3 rounded-lg bg-muted border border-border">
+            <p className="text-base font-semibold text-muted-foreground">
+              ⏳ Encargado notificado. En espera de cobro.
+            </p>
+          </div>
+        ) : !isBillRequested ? (
           <div className="flex gap-2">
             <button
               onClick={() => setShowMenu(true)}
