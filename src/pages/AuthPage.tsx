@@ -32,7 +32,6 @@ const AuthPage = () => {
         });
         if (signUpError) throw signUpError;
 
-        // Call handle_signup RPC to create profile and role
         const { error: rpcError } = await supabase.rpc('handle_signup', {
           _name: name,
           _role: selectedRole,
@@ -40,9 +39,13 @@ const AuthPage = () => {
         if (rpcError) throw rpcError;
 
         toast.success('¡Cuenta creada! Ingresando...');
+        setTimeout(() => { setIsSignUp(false); }, 1500);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.session) {
+          window.location.href = '/';
+        }
       }
     } catch (err: any) {
       toast.error(err.message || 'Error de autenticación');
