@@ -57,8 +57,6 @@ const OrderPanel = ({ table, onBack }: Props) => {
   const [sent, setSent] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showBill, setShowBill] = useState(false);
-  const [showPaymentTypeModal, setShowPaymentTypeModal] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'pagado');
   const hasActiveOrders = tableOrders.length > 0;
