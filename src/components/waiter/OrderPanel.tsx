@@ -62,6 +62,8 @@ const OrderPanel = ({ table, onBack }: Props) => {
   const hasActiveOrders = tableOrders.length > 0;
   const isFreeTable = table.status === 'free';
   const isBillRequested = table.status === 'bill_requested';
+  const isWaitingManager = isBillRequested && tableOrders.some(o => o.paymentType === 'tarjeta');
+  const isWaiter = currentUser?.role === 'waiter';
 
   const allOrderedItems = tableOrders.flatMap(o => o.items);
   const runningTotal = allOrderedItems.reduce((sum, oi) => sum + oi.menuItem.price * oi.quantity, 0);
