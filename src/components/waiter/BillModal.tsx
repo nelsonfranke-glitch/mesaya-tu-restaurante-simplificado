@@ -182,13 +182,15 @@ const BillModal = ({ table, orders, total, onClose, onConfirm }: Props) => {
             <CreditCard className="w-5 h-5" />
             ✅ Confirmar cobro
           </button>
-          <button
-            onClick={handleCallManager}
-            className="w-full py-3 rounded-xl border-2 border-blue-500 text-blue-600 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors active:scale-[0.98]"
-          >
-            <Phone className="w-4 h-4" />
-            💳 Factura / Tarjeta — Llamar encargado
-          </button>
+          {currentUser?.role === 'waiter' && (
+            <button
+              onClick={handleCallManager}
+              className="w-full py-3 rounded-xl border-2 border-blue-500 text-blue-600 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors active:scale-[0.98]"
+            >
+              <Phone className="w-4 h-4" />
+              💳 Factura / Tarjeta — Llamar encargado
+            </button>
+          )}
         </div>
       </div>
     </div>
