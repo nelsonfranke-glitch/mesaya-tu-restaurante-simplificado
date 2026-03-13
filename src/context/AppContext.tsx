@@ -98,6 +98,7 @@ interface AppState {
   session: Session | null;
   currentUser: User | null;
   loading: boolean;
+  authError: string | null;
   tables: RestaurantTable[];
   menu: MenuItem[];
   orders: Order[];
