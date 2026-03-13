@@ -148,6 +148,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
 
