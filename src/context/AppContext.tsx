@@ -237,6 +237,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             });
             await fetchAll(rid);
           } else {
+            // User authenticated but no profile/role — sign out
+            console.warn('No profile or role found for user, signing out');
+            setAuthError('Usuario no configurado. Contactá al encargado.');
+            await supabase.auth.signOut();
             setCurrentUser(null);
             setRestaurantId(null);
           }
