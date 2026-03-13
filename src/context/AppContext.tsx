@@ -208,24 +208,40 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   /* ── Auth ── */
 
   useEffect(() => {
+    // Timeout fallback: if loading is still true after 5s, force it off
+    const timeoutId = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) console.warn('Auth init timed out, forcing login screen');
+        return false;
+      });
+    }, 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess);
       if (sess?.user) {
-        // Fetch profile & role
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', sess.user.id).single();
-        const { data: roleRows } = await supabase.from('user_roles').select('role').eq('user_id', sess.user.id);
+        try {
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', sess.user.id).single();
+          const { data: roleRows } = await supabase.from('user_roles').select('role').eq('user_id', sess.user.id);
 
-        if (profile && roleRows && roleRows.length > 0) {
-          const role = roleRows[0].role as UserRole;
-          const rid = profile.restaurant_id as string;
-          setRestaurantId(rid);
-          setCurrentUser({
-            id: sess.user.id,
-            name: profile.name,
-            role,
-            restaurantId: rid,
-          });
-          await fetchAll(rid);
+          if (profile && roleRows && roleRows.length > 0) {
+            const role = roleRows[0].role as UserRole;
+            const rid = profile.restaurant_id as string;
+            setRestaurantId(rid);
+            setCurrentUser({
+              id: sess.user.id,
+              name: profile.name,
+              role,
+              restaurantId: rid,
+            });
+            await fetchAll(rid);
+          } else {
+            setCurrentUser(null);
+            setRestaurantId(null);
+          }
+        } catch (err) {
+          console.error('Error fetching profile/roles:', err);
+          setCurrentUser(null);
+          setRestaurantId(null);
         }
       } else {
         setCurrentUser(null);
@@ -238,7 +254,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (!s) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, [fetchAll]);
 
   /* ── Realtime ── */
