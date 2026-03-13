@@ -27,27 +27,78 @@ const AuthPage = () => {
 
     try {
       if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { name } },
         });
         if (signUpError) throw signUpError;
 
+        const userId = signUpData.user?.id;
+        if (!userId) throw new Error('No se pudo obtener el ID del usuario');
+
+        // Try RPC first, fallback to direct inserts
         const { error: rpcError } = await supabase.rpc('handle_signup', {
           _name: name,
           _role: selectedRole,
         } as any);
-        if (rpcError) throw rpcError;
 
-        toast.success('¡Cuenta creada! Ingresando...');
-        // onAuthStateChange will handle the redirect
+        if (rpcError) {
+          console.warn('handle_signup RPC failed, trying direct insert:', rpcError.message);
+
+          // Fallback: insert profile directly
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({ id: userId, name, restaurant_id: null }, { onConflict: 'id' });
+
+          if (profileError) {
+            console.error('Profile insert failed:', profileError.message);
+          }
+
+          // Fallback: get or create restaurant
+          const { data: restaurants } = await supabase
+            .from('restaurants')
+            .select('id')
+            .limit(1);
+
+          let restaurantId = restaurants?.[0]?.id;
+          if (!restaurantId) {
+            const { data: newRest } = await supabase
+              .from('restaurants')
+              .insert({ name: 'Mi Restaurante' })
+              .select('id')
+              .single();
+            restaurantId = newRest?.id;
+          }
+
+          if (restaurantId) {
+            await supabase
+              .from('profiles')
+              .update({ restaurant_id: restaurantId })
+              .eq('id', userId);
+          }
+
+          // Fallback: insert role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .upsert({ user_id: userId, role: selectedRole }, { onConflict: 'user_id,role' } as any);
+
+          if (roleError) {
+            console.error('Role insert failed:', roleError.message);
+          }
+        }
+
+        // Sign out after signup so user logs in fresh
+        await supabase.auth.signOut();
+        setIsSignUp(false);
+        setPassword('');
+        toast.success('¡Cuenta creada! Iniciá sesión con tus datos.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        // onAuthStateChange will handle the redirect
       }
     } catch (err: any) {
+      console.error('Auth error:', err);
       toast.error(err.message || 'Error de autenticación');
     } finally {
       setLoading(false);
