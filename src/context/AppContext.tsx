@@ -517,6 +517,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       session,
       currentUser,
       loading,
+      authError,
       tables, menu, orders, ingredients, recipes, notifications,
       logout,
       updateTableStatus, addMenuItem, updateMenuItem,
