@@ -38,13 +38,21 @@ const AuthPage = () => {
         if (!userId) throw new Error('No se pudo obtener el ID del usuario');
 
         // Try RPC first, fallback to direct inserts
-        const { error: rpcError } = await supabase.rpc('handle_signup', {
+        console.log('[SIGNUP] Calling handle_signup RPC with:', { _name: name, _role: selectedRole, userId });
+        const { data: rpcData, error: rpcError } = await supabase.rpc('handle_signup', {
           _name: name,
           _role: selectedRole,
         } as any);
+        console.log('[SIGNUP] RPC result:', { data: rpcData, error: rpcError });
 
         if (rpcError) {
-          console.warn('handle_signup RPC failed, trying direct insert:', rpcError.message);
+          console.error('[SIGNUP] handle_signup RPC FAILED:', {
+            message: rpcError.message,
+            details: (rpcError as any).details,
+            hint: (rpcError as any).hint,
+            code: (rpcError as any).code,
+          });
+          console.log('[SIGNUP] Falling back to direct inserts...');
 
           // Fallback: insert profile directly
           const { error: profileError } = await supabase
