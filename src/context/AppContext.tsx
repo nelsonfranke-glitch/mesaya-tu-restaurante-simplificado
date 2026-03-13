@@ -98,6 +98,7 @@ interface AppState {
   session: Session | null;
   currentUser: User | null;
   loading: boolean;
+  authError: string | null;
   tables: RestaurantTable[];
   menu: MenuItem[];
   orders: Order[];
@@ -147,6 +148,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
 
@@ -235,6 +237,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             });
             await fetchAll(rid);
           } else {
+            // User authenticated but no profile/role — sign out
+            console.warn('No profile or role found for user, signing out');
+            setAuthError('Usuario no configurado. Contactá al encargado.');
+            await supabase.auth.signOut();
             setCurrentUser(null);
             setRestaurantId(null);
           }
@@ -511,6 +517,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       session,
       currentUser,
       loading,
+      authError,
       tables, menu, orders, ingredients, recipes, notifications,
       logout,
       updateTableStatus, addMenuItem, updateMenuItem,
