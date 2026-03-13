@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useApp } from '@/context/AppContext';
 import { UserRole } from '@/types';
 import { UtensilsCrossed, ChefHat, LayoutDashboard, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,6 +13,7 @@ const roles: { role: UserRole; label: string; icon: React.ReactNode }[] = [
 ];
 
 const AuthPage = () => {
+  const { authError } = useApp();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,13 +41,11 @@ const AuthPage = () => {
         if (rpcError) throw rpcError;
 
         toast.success('¡Cuenta creada! Ingresando...');
-        setTimeout(() => { setIsSignUp(false); }, 1500);
+        // onAuthStateChange will handle the redirect
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        if (data.session) {
-          window.location.href = '/';
-        }
+        // onAuthStateChange will handle the redirect
       }
     } catch (err: any) {
       toast.error(err.message || 'Error de autenticación');
@@ -60,6 +60,12 @@ const AuthPage = () => {
         <h1 className="text-5xl font-display font-bold text-primary tracking-tight">MesaYa</h1>
         <p className="text-muted-foreground mt-2 text-lg">Gestión de restaurante simple y rápida</p>
       </div>
+
+      {authError && (
+        <div className="w-full max-w-sm mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm text-center">
+          {authError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         <div className="bg-card border border-border rounded-lg p-6 space-y-4">
