@@ -133,10 +133,10 @@ const AuthPage = () => {
       if (isSignUp) {
         const trimmedName = name.trim();
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name: trimmedName } },
-        });
+  email,
+  password,
+  options: { data: { name: trimmedName, role: selectedRole } },
+});
 
         if (signUpError) {
           throw new Error(`Error al registrar la cuenta: ${formatErrorMessage(signUpError, 'No se pudo registrar la cuenta')}`);
