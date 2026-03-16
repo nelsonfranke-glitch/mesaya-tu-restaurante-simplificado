@@ -354,7 +354,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   /* ── Mutations ── */
 
-  const logout = () => { supabase.auth.signOut(); };
+  const logout = () => {
+    setAuthError(null);
+    supabase.auth.signOut();
+  };
 
   const updateTableStatus = (tableId: string, status: TableStatus) => {
     supabase.from('restaurant_tables').update({ status }).eq('id', tableId).then();
