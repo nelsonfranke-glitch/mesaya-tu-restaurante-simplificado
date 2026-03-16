@@ -158,8 +158,8 @@ const AuthPage = () => {
         const { data: rpcData, error: rpcError } = await supabase.rpc('handle_signup', {
           _name: trimmedName,
           _role: selectedRole,
+          _user_id: userId,
         } as never);
-
         if (rpcError) {
           console.error('[SIGNUP] handle_signup RPC FAILED:', {
             message: rpcError.message,
