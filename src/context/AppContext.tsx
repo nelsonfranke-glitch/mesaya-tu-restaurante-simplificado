@@ -210,7 +210,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   /* ── Auth ── */
 
   useEffect(() => {
-    // Timeout fallback: if loading is still true after 5s, force it off
     const timeoutId = setTimeout(() => {
       setLoading(prev => {
         if (prev) console.warn('Auth init timed out, forcing login screen');
@@ -218,49 +217,93 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       });
     }, 5000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
-      setSession(sess);
-      if (sess?.user) {
-        try {
-          const { data: profile } = await supabase.from('profiles').select('*').eq('id', sess.user.id).single();
-          const { data: roleRows } = await supabase.from('user_roles').select('role').eq('user_id', sess.user.id);
+    let isMounted = true;
 
-          if (profile && roleRows && roleRows.length > 0) {
-            const role = roleRows[0].role as UserRole;
-            const rid = profile.restaurant_id as string;
-            setRestaurantId(rid);
-            setCurrentUser({
-              id: sess.user.id,
-              name: profile.name,
-              role,
-              restaurantId: rid,
-            });
-            await fetchAll(rid);
-          } else {
-            // User authenticated but no profile/role — sign out
-            console.warn('No profile or role found for user, signing out');
-            setAuthError('Usuario no configurado. Contactá al encargado.');
-            await supabase.auth.signOut();
+    const bootstrapUser = async (userId: string) => {
+      try {
+        const [{ data: profile, error: profileError }, { data: roleRows, error: roleError }] = await Promise.all([
+          supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+          supabase.from('user_roles').select('role').eq('user_id', userId),
+        ]);
+
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('[AUTH] Error fetching profile:', profileError);
+        }
+
+        if (roleError) {
+          console.error('[AUTH] Error fetching roles:', roleError);
+        }
+
+        if (!profile || !roleRows?.length || !profile.restaurant_id) {
+          console.warn('[AUTH] Missing profile or role after login, signing out', {
+            userId,
+            hasProfile: Boolean(profile),
+            hasRole: Boolean(roleRows?.length),
+            restaurantId: profile?.restaurant_id ?? null,
+          });
+
+          setAuthError('Usuario no configurado. Contactá al administrador.');
+          await supabase.auth.signOut();
+
+          if (isMounted) {
             setCurrentUser(null);
             setRestaurantId(null);
+            setLoading(false);
           }
-        } catch (err) {
-          console.error('Error fetching profile/roles:', err);
+          return;
+        }
+
+        const role = roleRows[0].role as UserRole;
+        const rid = profile.restaurant_id as string;
+
+        if (!isMounted) return;
+
+        setAuthError(null);
+        setRestaurantId(rid);
+        setCurrentUser({
+          id: userId,
+          name: profile.name,
+          role,
+          restaurantId: rid,
+        });
+        setLoading(false);
+
+        fetchAll(rid).catch(err => {
+          console.error('[AUTH] Initial data fetch failed:', err);
+        });
+      } catch (err) {
+        console.error('[AUTH] Error during auth bootstrap:', err);
+        if (isMounted) {
           setCurrentUser(null);
           setRestaurantId(null);
+          setLoading(false);
         }
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      if (!isMounted) return;
+
+      setSession(sess);
+
+      if (sess?.user) {
+        setAuthError(null);
+        setLoading(true);
+        await bootstrapUser(sess.user.id);
       } else {
         setCurrentUser(null);
         setRestaurantId(null);
+        if (event !== 'SIGNED_OUT') setAuthError(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!s) setLoading(false);
+      if (!s && isMounted) setLoading(false);
     });
 
     return () => {
+      isMounted = false;
       clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
@@ -311,7 +354,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   /* ── Mutations ── */
 
-  const logout = () => { supabase.auth.signOut(); };
+  const logout = () => {
+    setAuthError(null);
+    supabase.auth.signOut();
+  };
 
   const updateTableStatus = (tableId: string, status: TableStatus) => {
     supabase.from('restaurant_tables').update({ status }).eq('id', tableId).then();

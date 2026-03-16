@@ -12,6 +12,21 @@ const roles: { role: UserRole; label: string; icon: React.ReactNode }[] = [
   { role: 'kitchen', label: 'Cocina', icon: <ChefHat className="w-5 h-5" /> },
 ];
 
+const formatErrorMessage = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== 'object') return fallback;
+
+  const maybeError = error as {
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+  };
+
+  return [maybeError.message, maybeError.details, maybeError.hint, maybeError.code]
+    .filter(Boolean)
+    .join(' · ') || fallback;
+};
+
 const AuthPage = () => {
   const { authError } = useApp();
   const [isSignUp, setIsSignUp] = useState(false);
@@ -21,93 +36,181 @@ const AuthPage = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole>('waiter');
   const [loading, setLoading] = useState(false);
 
+  const getRestaurantIdForSignup = async () => {
+    const { data, error } = await supabase.from('restaurants').select('id').limit(1);
+
+    if (error) {
+      throw new Error(`No se pudo obtener el restaurante: ${formatErrorMessage(error, 'Error al buscar restaurante')}`);
+    }
+
+    const restaurantId = data?.[0]?.id;
+    if (!restaurantId) {
+      throw new Error('No hay ningún restaurante configurado para asignar al usuario.');
+    }
+
+    return restaurantId;
+  };
+
+  const validateUserSetup = async (userId: string) => {
+    const [{ data: profile, error: profileError }, { data: roleRows, error: roleError }] = await Promise.all([
+      supabase.from('profiles').select('id, restaurant_id').eq('id', userId).maybeSingle(),
+      supabase.from('user_roles').select('role').eq('user_id', userId),
+    ]);
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('[SIGNUP] Error checking profile:', {
+        message: profileError.message,
+        details: profileError.details,
+        hint: profileError.hint,
+        code: profileError.code,
+      });
+    }
+
+    if (roleError) {
+      console.error('[SIGNUP] Error checking role:', {
+        message: roleError.message,
+        details: roleError.details,
+        hint: roleError.hint,
+        code: roleError.code,
+      });
+    }
+
+    return {
+      hasProfile: Boolean(profile),
+      hasRole: Boolean(roleRows?.length),
+      restaurantId: profile?.restaurant_id ?? null,
+    };
+  };
+
+  const createUserSetupFallback = async (userId: string, userName: string, role: UserRole) => {
+    console.warn('[SIGNUP] Running direct insert fallback for profile/role', { userId, role });
+
+    const restaurantId = await getRestaurantIdForSignup();
+
+    const { error: profileError } = await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        name: userName,
+        restaurant_id: restaurantId,
+      },
+      { onConflict: 'id' }
+    );
+
+    if (profileError) {
+      console.error('[SIGNUP] Profile fallback failed:', {
+        message: profileError.message,
+        details: profileError.details,
+        hint: profileError.hint,
+        code: profileError.code,
+      });
+      throw new Error(`Error al crear el perfil: ${formatErrorMessage(profileError, 'No se pudo crear el perfil')}`);
+    }
+
+    const { error: roleError } = await supabase.from('user_roles').upsert(
+      {
+        user_id: userId,
+        role,
+      },
+      { onConflict: 'user_id,role' } as never
+    );
+
+    if (roleError) {
+      console.error('[SIGNUP] Role fallback failed:', {
+        message: roleError.message,
+        details: roleError.details,
+        hint: roleError.hint,
+        code: roleError.code,
+      });
+      throw new Error(`Error al asignar el rol: ${formatErrorMessage(roleError, 'No se pudo asignar el rol')}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isSignUp) {
+        const trimmedName = name.trim();
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name } },
+          options: { data: { name: trimmedName } },
         });
-        if (signUpError) throw signUpError;
+
+        if (signUpError) {
+          throw new Error(`Error al registrar la cuenta: ${formatErrorMessage(signUpError, 'No se pudo registrar la cuenta')}`);
+        }
 
         const userId = signUpData.user?.id;
-        if (!userId) throw new Error('No se pudo obtener el ID del usuario');
+        if (!userId) {
+          throw new Error('No se pudo obtener el ID del usuario después del registro.');
+        }
 
-        // Try RPC first, fallback to direct inserts
-        console.log('[SIGNUP] Calling handle_signup RPC with:', { _name: name, _role: selectedRole, userId });
+        console.log('[SIGNUP] User created successfully:', {
+          userId,
+          email,
+          role: selectedRole,
+          hasSession: Boolean(signUpData.session),
+        });
+
+        let setupMode: 'rpc' | 'fallback' = 'rpc';
         const { data: rpcData, error: rpcError } = await supabase.rpc('handle_signup', {
-          _name: name,
+          _name: trimmedName,
           _role: selectedRole,
-        } as any);
-        console.log('[SIGNUP] RPC result:', { data: rpcData, error: rpcError });
+        } as never);
 
         if (rpcError) {
           console.error('[SIGNUP] handle_signup RPC FAILED:', {
             message: rpcError.message,
-            details: (rpcError as any).details,
-            hint: (rpcError as any).hint,
-            code: (rpcError as any).code,
+            details: rpcError.details,
+            hint: rpcError.hint,
+            code: rpcError.code,
+            userId,
+            email,
+            role: selectedRole,
           });
-          console.log('[SIGNUP] Falling back to direct inserts...');
+          setupMode = 'fallback';
+          await createUserSetupFallback(userId, trimmedName, selectedRole);
+        } else {
+          console.log('[SIGNUP] handle_signup RPC SUCCEEDED:', rpcData);
+          const setupState = await validateUserSetup(userId);
 
-          // Fallback: insert profile directly
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({ id: userId, name, restaurant_id: null }, { onConflict: 'id' });
-
-          if (profileError) {
-            console.error('Profile insert failed:', profileError.message);
-          }
-
-          // Fallback: get or create restaurant
-          const { data: restaurants } = await supabase
-            .from('restaurants')
-            .select('id')
-            .limit(1);
-
-          let restaurantId = restaurants?.[0]?.id;
-          if (!restaurantId) {
-            const { data: newRest } = await supabase
-              .from('restaurants')
-              .insert({ name: 'Mi Restaurante' })
-              .select('id')
-              .single();
-            restaurantId = newRest?.id;
-          }
-
-          if (restaurantId) {
-            await supabase
-              .from('profiles')
-              .update({ restaurant_id: restaurantId })
-              .eq('id', userId);
-          }
-
-          // Fallback: insert role
-          const { error: roleError } = await supabase
-            .from('user_roles')
-            .upsert({ user_id: userId, role: selectedRole }, { onConflict: 'user_id,role' } as any);
-
-          if (roleError) {
-            console.error('Role insert failed:', roleError.message);
+          if (!setupState.hasProfile || !setupState.hasRole || !setupState.restaurantId) {
+            console.warn('[SIGNUP] RPC finished but setup is incomplete, switching to fallback:', setupState);
+            setupMode = 'fallback';
+            await createUserSetupFallback(userId, trimmedName, selectedRole);
           }
         }
 
-        // Sign out after signup so user logs in fresh
+        const finalSetup = await validateUserSetup(userId);
+        if (!finalSetup.hasProfile || !finalSetup.hasRole || !finalSetup.restaurantId) {
+          throw new Error('No se pudo completar la configuración del usuario luego del registro.');
+        }
+
+        console.log('[SIGNUP] Registration completed:', {
+          userId,
+          setupMode,
+          finalSetup,
+        });
+
         await supabase.auth.signOut();
         setIsSignUp(false);
         setPassword('');
-        toast.success('¡Cuenta creada! Iniciá sesión con tus datos.');
+        setName('');
+        toast.success('¡Cuenta creada! Ahora podés iniciar sesión.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+
+        if (error) {
+          throw new Error(`Error al iniciar sesión: ${formatErrorMessage(error, 'No se pudo iniciar sesión')}`);
+        }
+
+        console.log('[LOGIN] Login succeeded for:', email);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Auth error:', err);
-      toast.error(err.message || 'Error de autenticación');
+      toast.error(formatErrorMessage(err, 'Error de autenticación'));
     } finally {
       setLoading(false);
     }
