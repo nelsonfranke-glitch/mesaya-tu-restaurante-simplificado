@@ -353,10 +353,22 @@ export type Database = {
         Returns: undefined
       }
       get_user_restaurant_id: { Args: { _user_id: string }; Returns: string }
-      handle_signup: {
-        Args: { _name: string; _role: Database["public"]["Enums"]["app_role"] }
-        Returns: undefined
-      }
+      handle_signup:
+        | {
+            Args: {
+              _name: string
+              _role: Database["public"]["Enums"]["app_role"]
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              _name: string
+              _role: Database["public"]["Enums"]["app_role"]
+              _user_id?: string
+            }
+            Returns: undefined
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

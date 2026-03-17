@@ -234,22 +234,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           console.error('[AUTH] Error fetching roles:', roleError);
         }
 
-        if (!profile || !roleRows?.length || !profile.restaurant_id) {
-          console.warn('[AUTH] Missing profile or role after login, signing out', {
-            userId,
-            hasProfile: Boolean(profile),
-            hasRole: Boolean(roleRows?.length),
-            restaurantId: profile?.restaurant_id ?? null,
-          });
-
+        if (!profile || !profile.restaurant_id) {
+          console.warn('[AUTH] Missing profile after login, signing out');
           setAuthError('Usuario no configurado. Contactá al administrador.');
           await supabase.auth.signOut();
+          if (isMounted) { setCurrentUser(null); setRestaurantId(null); setLoading(false); }
+          return;
+        }
 
-          if (isMounted) {
-            setCurrentUser(null);
-            setRestaurantId(null);
-            setLoading(false);
-          }
+        // User has profile but no role yet — show pending screen
+        if (!roleRows?.length) {
+          const rid = profile.restaurant_id as string;
+          if (!isMounted) return;
+          setAuthError(null);
+          setRestaurantId(rid);
+          setCurrentUser({
+            id: userId,
+            name: profile.name,
+            role: null as any, // no role yet
+            restaurantId: rid,
+          });
+          setLoading(false);
           return;
         }
 
