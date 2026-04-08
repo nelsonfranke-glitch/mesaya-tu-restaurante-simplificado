@@ -1,8 +1,9 @@
 import { useApp } from '@/context/AppContext';
-import { LogOut, DollarSign, ShoppingBag, Clock, Grid3X3, AlertTriangle, UtensilsCrossed, Settings, Receipt } from 'lucide-react';
+import { LogOut, DollarSign, ShoppingBag, Clock, Grid3X3, AlertTriangle, UtensilsCrossed, Settings, Receipt, Shield } from 'lucide-react';
 import { useState } from 'react';
 import MenuManagement from '@/components/owner/MenuManagement';
 import InventoryManagement from '@/components/owner/InventoryManagement';
+import UsersManagement from '@/components/owner/UsersManagement';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import BillModal from '@/components/waiter/BillModal';
 
@@ -19,7 +20,7 @@ const hourlyData = [
   { hour: '23h', pedidos: 3 },
 ];
 
-type Tab = 'dashboard' | 'menu' | 'inventory';
+type Tab = 'dashboard' | 'menu' | 'inventory' | 'users';
 
 const DashboardPage = () => {
   const { currentUser, logout, orders, tables, menu, ingredients } = useApp();
@@ -94,6 +95,7 @@ const DashboardPage = () => {
     { key: 'dashboard', label: 'Dashboard', icon: <Grid3X3 className="w-4 h-4" /> },
     { key: 'menu', label: 'Menú', icon: <UtensilsCrossed className="w-4 h-4" /> },
     { key: 'inventory', label: 'Inventario', icon: <Settings className="w-4 h-4" /> },
+    { key: 'users', label: 'Usuarios', icon: <Shield className="w-4 h-4" /> },
   ];
 
   return (
@@ -287,6 +289,7 @@ const DashboardPage = () => {
 
         {activeTab === 'menu' && <MenuManagement />}
         {activeTab === 'inventory' && <InventoryManagement />}
+        {activeTab === 'users' && <UsersManagement />}
       </div>
 
       {selectedBillTableId && (() => {
